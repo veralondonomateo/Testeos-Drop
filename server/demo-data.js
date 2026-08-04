@@ -58,7 +58,7 @@ export async function seedDemo(db) {
       { name: 'Servientrega', cost: 13500, active: true },
       { name: 'Envía', cost: 12500, active: true },
     ]],
-    ['pixels', { meta: '', tiktok: '', google: '' }],
+    ['pixels', { meta: '2254427585292292', tiktok: '', google: '' }],
     ['demo_data', true],
   ];
   await bulk(db, 'settings', ['key', 'value'],

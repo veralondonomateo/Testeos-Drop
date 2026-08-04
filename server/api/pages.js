@@ -1,4 +1,4 @@
-import { all, one, run, insert, update } from '../db.js';
+import { all, one, run, insert, update, getSetting } from '../db.js';
 import { id, nowISO, slugify, clean } from '../lib/util.js';
 import { HttpError, notFound } from '../lib/http.js';
 
@@ -152,6 +152,47 @@ export async function duplicatePage(pid) {
 }
 
 /**
+ * Código base del píxel de Meta.
+ *
+ * Va lo más arriba posible para que `PageView` dispare antes de que el runtime
+ * cargue: si se retrasa, Meta pierde vistas y la optimización se degrada.
+ *
+ * `ViewContent` sale aquí mismo con el valor del producto, para que el
+ * algoritmo tenga señal de intención desde la primera visita. Los eventos del
+ * embudo (InitiateCheckout, Purchase) los dispara `runtime.js`.
+ */
+function metaPixel(pixelId, product) {
+  if (!pixelId) return '';
+  const value = product?.price ?? 0;
+  const contentId = product?.id ?? '';
+  const contentName = (product?.name ?? '').replace(/'/g, "\\'");
+  return `
+<!-- Meta Pixel -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${pixelId}');
+fbq('track', 'PageView');
+fbq('track', 'ViewContent', {
+  content_ids: ['${contentId}'],
+  content_name: '${contentName}',
+  content_type: 'product',
+  value: ${value},
+  currency: 'COP'
+});
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/></noscript>
+<!-- End Meta Pixel -->`;
+}
+
+/**
  * Devuelve el HTML público de la landing con el runtime de tracking inyectado
  * justo antes de `</body>`.
  */
@@ -165,6 +206,11 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
     ? await all('SELECT * FROM offers WHERE product_id = ? ORDER BY sort, price', [product.id])
     : [];
 
+  const pixels = await getSetting('pixels', {});
+  // En preview no se dispara nada: mirar tu propia landing no debe ensuciar
+  // ni tus métricas ni el aprendizaje del píxel.
+  const metaId = preview ? '' : (pixels.meta || '').trim();
+
   const ctx = {
     pageId: p.id,
     pageSlug: p.slug,
@@ -172,6 +218,7 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
     testId: p.test_id,
     variant: p.variant,
     preview,
+    meta_pixel: metaId,
     product: product && { id: product.id, name: product.name, price: product.price, ship_cost: product.ship_cost },
     offers: offers.map((o) => ({ id: o.id, name: o.name, qty: o.qty, price: o.price, is_default: !!o.is_default })),
   };
@@ -179,7 +226,16 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
   // El runtime vive en public/, así que lo sirve el CDN de Vercel (y el
   // servidor local con la misma ruta): no pasa por la función serverless.
   const inject = `\n<script>window.__DS__=${JSON.stringify(ctx).replace(/</g, '\\u003c')};</script>\n<script src="/runtime.js" defer></script>\n`;
-  const source = p.html || '';
+  const pixel = metaPixel(metaId, product);
+  let source = p.html || '';
+
+  // El píxel entra en el <head> para adelantar el PageView todo lo posible.
+  if (pixel) {
+    source = source.includes('</head>')
+      ? source.replace(/<\/head>/i, `${pixel}\n</head>`)
+      : pixel + source;
+  }
+
   return source.includes('</body>')
     ? source.replace(/<\/body>/i, `${inject}</body>`)
     : source + inject;

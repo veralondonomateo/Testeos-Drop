@@ -97,6 +97,24 @@ Variables de entorno (**Settings → Environment Variables**):
 > No hay usuario por defecto en el código: si la migración no ha corrido, la
 > tabla `users` no existe y el login responde 500.
 
+### Píxel de Meta
+
+Ya viene configurado (`2254427585292292`) y se inyecta en toda landing
+publicada. Se cambia desde **Ajustes → Píxeles**, sin redesplegar.
+
+| Evento | Cuándo |
+|---|---|
+| `PageView` · `ViewContent` | al cargar la landing, con el valor del producto |
+| `InitiateCheckout` | al abrir el checkout |
+| `Purchase` | al confirmar el pedido, con valor en COP y `order_id` |
+
+El preview (`?preview=1`) **no** dispara nada: mirar tu propia landing no
+ensucia tus métricas ni el aprendizaje del píxel.
+
+> En contra entrega, `Purchase` significa **pedido tomado**, no cobrado. Meta
+> optimizará a pedidos; tu tasa de entrega decide cuántos se vuelven dinero.
+> Si tu entrega ronda el 50%, tu CPA real es el doble del que verás en Meta.
+
 ### Fijar o recuperar la contraseña
 
 Una vez creado el usuario, volver a migrar con otra contraseña **no** la cambia.

@@ -48,6 +48,22 @@
 
   var sent = {};
 
+  /* ── Píxel de Meta ─────────────────────────────────────────────────── */
+
+  // Cada evento lleva su propio eventID. Hoy sólo sirve para no duplicar si
+  // el usuario recarga; mañana permite deduplicar contra la API de
+  // Conversiones sin tocar esta parte.
+  function eventId(name) {
+    return name + '_' + SID + '_' + Date.now().toString(36);
+  }
+
+  function meta(event, params) {
+    if (CTX.preview || !CTX.meta_pixel || typeof window.fbq !== 'function') return;
+    try {
+      window.fbq('track', event, params || {}, { eventID: eventId(event) });
+    } catch (e) { /* que un fallo del píxel nunca rompa el checkout */ }
+  }
+
   function track(type, value) {
     if (CTX.preview) return;                  // el preview del panel no ensucia métricas
     var payload = JSON.stringify({
@@ -97,7 +113,18 @@
     var el = e.target.closest ? e.target.closest('a[href="#pedir"], [data-ds-cta]') : null;
     if (!el) return;
     track('cta_click');
-    setTimeout(function () { once('checkout_open'); }, 60);
+    setTimeout(function () {
+      if (sent.checkout_open) return;
+      once('checkout_open');
+      var o = (CTX.offers || [])[0];
+      meta('InitiateCheckout', {
+        content_ids: [CTX.productId || ''],
+        content_type: 'product',
+        num_items: o ? o.qty : 1,
+        value: o ? o.price : (CTX.product ? CTX.product.price : 0),
+        currency: 'COP'
+      });
+    }, 60);
   }, true);
 
   /* ── Envío del pedido ──────────────────────────────────────────────── */
@@ -200,6 +227,18 @@
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
+        // Purchase se dispara con el pedido confirmado. En contra entrega eso
+        // significa "pedido tomado", no "cobrado": Meta optimizará a pedidos,
+        // y tu tasa de entrega decide cuántos se vuelven dinero.
+        meta('Purchase', {
+          content_ids: [CTX.productId || ''],
+          content_type: 'product',
+          content_name: offer ? offer.name : '',
+          num_items: offer ? offer.qty : 1,
+          value: res.data.total || (offer ? offer.price : 0),
+          currency: 'COP',
+          order_id: res.data.code || ''
+        });
         showSuccess(res.data, offer);
       })
       .catch(function (err) {

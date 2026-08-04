@@ -516,12 +516,19 @@ export async function settingsView({ host }) {
 
   content.append(card({
     title: 'Píxeles de seguimiento',
-    subtitle: 'Se guardan aquí; la inyección automática llega con el módulo de anuncios',
+    subtitle: 'El de Meta ya se inyecta en todas las landings publicadas',
     body: el('div', { class: 'stack' },
       banner({
-        ico: 'info',
-        text: 'Por ahora el panel mide con su propio tracking de primera parte (visitas, clics, checkout y pedidos). '
-          + 'Estos IDs quedan guardados para cuando conectemos las plataformas.',
+        ico: 'check',
+        html: '<b>Meta está activo.</b> Cada landing publicada dispara <code>PageView</code> y '
+          + '<code>ViewContent</code> al cargar, <code>InitiateCheckout</code> al abrir el checkout '
+          + 'y <code>Purchase</code> al confirmar el pedido, con valor en COP. '
+          + 'Déjalo vacío para desactivarlo.',
+      }),
+      banner({
+        tone: 'warn', ico: 'alert',
+        html: 'En contra entrega, <code>Purchase</code> significa <b>pedido tomado</b>, no cobrado. '
+          + 'Meta optimizará a pedidos; tu tasa de entrega decide cuántos se vuelven dinero.',
       }),
       pixelForm),
   }));

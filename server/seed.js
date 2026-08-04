@@ -273,7 +273,7 @@ export async function ensureSeed() {
     { name: 'Envía', cost: 12500, active: true },
     { name: 'Coordinadora', cost: 14000, active: false },
   ]);
-  await setSetting('pixels', { meta: '', tiktok: '', google: '' });
+  await setSetting('pixels', { meta: '2254427585292292', tiktok: '', google: '' });
 
   // ── Producto piloto ──
   const product = {
