@@ -8,6 +8,29 @@ Corre sobre **Vercel + Supabase**.
 
 ---
 
+## Verlo en Vercel sin base de datos
+
+En **Settings → Environment Variables** añade:
+
+```
+DEMO_MODE = 1
+```
+
+Redespliega y entra con **cualquier correo y cualquier contraseña**.
+
+La plataforma corre contra un Postgres en memoria que se siembra al arrancar:
+84 pedidos, 4 landings, testeo con variantes y 30 días de analítica. Lo que
+edites no se guarda — la base se reinicia con cada arranque en frío.
+
+> Es excluyente por diseño: con `DEMO_MODE` activo **nunca** se abre
+> `DATABASE_URL`. Aunque lo dejaras encendido después de conectar Supabase, no
+> puede exponer pedidos ni datos de clientes reales; sólo muestra los ficticios.
+
+Para pasar a datos reales: quita `DEMO_MODE`, añade `DATABASE_URL` y corre
+`npm run migrate`.
+
+---
+
 ## Verlo funcionando en 1 minuto
 
 Sin Supabase, sin configurar nada:

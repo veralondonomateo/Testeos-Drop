@@ -59,7 +59,14 @@ export default async function dashboard({ host }) {
     const s = data.series;
     const colors = seriesColors();
 
-    if (state.bootstrap?.demo_data) {
+    if (state.bootstrap?.demo_mode) {
+      content.append(banner({
+        tone: 'warn', ico: 'alert',
+        html: '<b>Modo demostración.</b> La base vive en memoria y se reinicia sola: lo que edites '
+          + 'aquí no se guarda. Para usar datos reales, quita <code>DEMO_MODE</code> y añade '
+          + '<code>DATABASE_URL</code> en Vercel.',
+      }));
+    } else if (state.bootstrap?.demo_data) {
       content.append(banner({
         tone: 'warn', ico: 'alert',
         html: '<b>Datos de demostración activos.</b> Están aquí para que veas el panel funcionando. '

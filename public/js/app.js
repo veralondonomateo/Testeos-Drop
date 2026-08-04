@@ -78,7 +78,7 @@ function renderLogin(prefillError) {
         errBox,
         isLocal
           ? el('div', { class: 'login-hint', html: 'Acceso de prueba · <code>admin@dropstudio.co</code> / <code>admin123</code>' })
-          : null)),
+          : el('div', { class: 'login-hint', id: 'demo-hint', style: { display: 'none' } }))),
 
     el('div', { class: 'login-art' },
       el('div', { class: 'brand' },
@@ -272,6 +272,19 @@ async function boot() {
   await renderRoute();
 }
 
+// En modo demostración el login acepta cualquier cosa; conviene decirlo.
+async function flagDemoMode() {
+  try {
+    const h = await fetch('/api/health').then((r) => r.json());
+    if (!String(h.modo || '').startsWith('DEMO')) return;
+    const hint = document.getElementById('demo-hint');
+    if (hint) {
+      hint.style.display = '';
+      hint.innerHTML = '<b>Modo demostración.</b> Entra con cualquier correo y contraseña.';
+    }
+  } catch { /* sin health, se deja el formulario normal */ }
+}
+
 (async function start() {
   try {
     const { user } = await api.get('/api/auth/me');
@@ -279,6 +292,7 @@ async function boot() {
     await boot();
   } catch {
     renderLogin();
+    flagDemoMode();
   }
 })();
 

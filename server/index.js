@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { PUBLIC_DIR, PORT, HOST, ORDER_STATUS, TEST_STATUS, VERDICTS } from './config.js';
-import { one, getSetting, setSetting, hasConnectionString, DbError } from './db.js';
+import { one, getSetting, setSetting, hasConnectionString, DbError, IS_DEMO } from './db.js';
 import {
   Router, readBody, json, text, html, parseCookies, cookie, serveStatic,
   HttpError, notFound, escapeHtml,
@@ -26,12 +26,19 @@ const auth = (ctx) => Auth.requireAuth(ctx);
 router.get('/api/health', async ({ res }) => {
   const out = {
     ok: false,
+    modo: IS_DEMO ? 'DEMOSTRACIÓN (base en memoria)' : 'producción',
     database_url: hasConnectionString() ? 'configurada' : 'FALTA',
     conexion: null,
     esquema: null,
     usuarios: null,
     siguiente_paso: null,
   };
+
+  if (IS_DEMO) {
+    const r = await one('SELECT COUNT(*) n FROM users');
+    return json(res, { ...out, ok: true, conexion: 'memoria', esquema: 'ok', usuarios: r.n,
+      siguiente_paso: 'Modo demostración activo. Quita DEMO_MODE y añade DATABASE_URL para usar datos reales.' });
+  }
 
   if (!hasConnectionString()) {
     out.siguiente_paso = 'Añade DATABASE_URL en Vercel → Settings → Environment Variables '
@@ -91,6 +98,7 @@ router.get('/api/bootstrap', async ({ ctx }) => {
     verdicts: VERDICTS,
     settings: { store, couriers, pixels },
     demo_data: demo,
+    demo_mode: IS_DEMO,
     counts: {
       orders: orders.n, products: products.n, pages: pages.n,
       tests: tests.n, pending: pending.n,

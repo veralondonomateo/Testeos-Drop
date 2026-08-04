@@ -1,4 +1,4 @@
-import { all, one, run } from '../db.js';
+import { all, one, run, IS_DEMO } from '../db.js';
 import { SESSION_DAYS } from '../config.js';
 import { id, token, nowISO, hashPassword, verifyPassword, clean } from '../lib/util.js';
 import { HttpError, unauthorized } from '../lib/http.js';
@@ -25,6 +25,13 @@ export async function userFromToken(t) {
 }
 
 export async function login(email, password) {
+  // En modo demostración cualquier credencial entra: no hay datos reales que
+  // proteger y el objetivo es que se pueda mirar la plataforma sin fricción.
+  if (IS_DEMO) {
+    const demoUser = await one('SELECT id, email, name, role FROM users LIMIT 1');
+    if (demoUser) return { user: demoUser, token: await createSession(demoUser.id) };
+  }
+
   const user = await one('SELECT * FROM users WHERE email = ?', [clean(email, 160).toLowerCase()]);
   if (!user || !verifyPassword(String(password ?? ''), user.password_hash)) {
     throw new HttpError(401, 'Correo o contraseña incorrectos');

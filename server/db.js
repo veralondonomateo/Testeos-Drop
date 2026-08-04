@@ -39,6 +39,34 @@ export class DbError extends Error {
 export const hasConnectionString = () => !!process.env.DATABASE_URL;
 
 /**
+ * Modo demostración: toda la app corre contra un Postgres en memoria (PGlite)
+ * sembrado al arrancar. Sirve para enseñar la plataforma sin base externa.
+ *
+ * Es deliberadamente excluyente: cuando está activo NUNCA se toca DATABASE_URL.
+ * Así, aunque quedara encendido por descuido después de conectar Supabase, no
+ * puede exponer pedidos ni datos de clientes reales — sólo muestra los ficticios.
+ */
+export const IS_DEMO = process.env.DEMO_MODE === '1';
+
+async function getDemoDb() {
+  if (globalThis.__dsDemo) return globalThis.__dsDemo;
+  globalThis.__dsDemo = (async () => {
+    const [{ PGlite }, { createSchema }, { seedDemo }] = await Promise.all([
+      import('@electric-sql/pglite'),
+      import('./db.js'),
+      import('./demo-data.js'),
+    ]);
+    const db = new PGlite();
+    globalThis.__dsDemoRaw = db;
+    await createSchema();
+    const stats = await seedDemo(db);
+    console.log(`[demo] base en memoria lista · ${stats.orders} pedidos, ${stats.events} eventos`);
+    return db;
+  })();
+  return globalThis.__dsDemo;
+}
+
+/**
  * El pool se crea de forma perezosa. Antes esto lanzaba al importar el módulo:
  * en Vercel eso tumba la función entera y el navegador recibe un 500 mudo, sin
  * pista de qué falta. Ahora el error llega como respuesta legible.
@@ -103,6 +131,13 @@ function translate(err) {
 
 /** Ejecuta una consulta traduciendo los errores de configuración. */
 async function query(sql, params) {
+  if (IS_DEMO) {
+    const db = await getDemoDb();
+    const res = await db.query(sql, params);
+    // PGlite reporta `affectedRows`; pg usa `rowCount`. Se unifica aquí para
+    // que los helpers de arriba no tengan que saber cuál motor hay debajo.
+    return { rows: res.rows ?? [], rowCount: res.affectedRows ?? res.rows?.length ?? 0 };
+  }
   try {
     return await getPool().query(sql, params);
   } catch (err) {
@@ -195,7 +230,10 @@ export async function setSetting(key, value) {
  * y una fuente de condiciones de carrera.
  */
 export async function createSchema() {
-  await getPool().query(`
+  const exec = IS_DEMO
+    ? (sql) => globalThis.__dsDemoRaw.exec(sql)
+    : (sql) => getPool().query(sql);
+  await exec(`
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
   email         TEXT UNIQUE NOT NULL,
