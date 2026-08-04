@@ -8,6 +8,28 @@ Corre sobre **Vercel + Supabase**.
 
 ---
 
+## Verlo funcionando en 1 minuto
+
+Sin Supabase, sin configurar nada:
+
+```bash
+npm install
+npm run demo
+```
+
+Levanta un Postgres local, siembra datos de demostración y abre el panel en
+<http://127.0.0.1:4321>.
+
+```
+Correo       admin@dropstudio.co
+Contraseña   demo1234
+```
+
+Es sólo para mirar: los datos viven en `.demo-db/` y no tocan tu despliegue.
+Para producción, sigue con Supabase abajo.
+
+---
+
 ## Desplegar
 
 ### 1. Base de datos (Supabase)
@@ -47,6 +69,11 @@ Variables de entorno (**Settings → Environment Variables**):
 | `DATABASE_URL` | la del pooler de Supabase (6543) |
 | `ADMIN_EMAIL` | tu correo |
 | `ADMIN_PASSWORD` | una contraseña fuerte |
+
+> **Los accesos al panel los crea `npm run migrate`**, con esas dos variables.
+> No hay usuario por defecto en el código: si la migración no ha corrido, la
+> tabla `users` no existe y el login responde 500. Y una vez creado el usuario,
+> volver a migrar con otra contraseña **no** la cambia.
 
 El enrutado lo define `vercel.json`: `/api/*` y `/p/*` van a la función
 serverless, todo lo demás lo sirve el CDN desde `public/`.

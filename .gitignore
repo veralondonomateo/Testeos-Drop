@@ -12,10 +12,10 @@ dist/
 .vercel/
 .turbo/
 
-# ── Utilidades locales de prueba ───────────────────────────────────────
-# Postgres embebido que se usa sólo para probar la migración en local.
+# ── Modo demostración local ────────────────────────────────────────────
+# Postgres embebido que levanta `npm run demo`. Se regenera solo.
+.demo-db/
 .pgtest.mjs
-pgdata/
 
 # ── Sistema y editores ─────────────────────────────────────────────────
 .DS_Store

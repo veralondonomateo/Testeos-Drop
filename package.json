@@ -10,9 +10,14 @@
   "scripts": {
     "start": "node --no-warnings --env-file-if-exists=.env server/index.js",
     "dev": "node --no-warnings --env-file-if-exists=.env --watch server/index.js",
-    "migrate": "node --no-warnings --env-file-if-exists=.env server/migrate.js"
+    "migrate": "node --no-warnings --env-file-if-exists=.env server/migrate.js",
+    "demo": "node --no-warnings server/demo.js"
   },
   "dependencies": {
     "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@embedded-postgres/darwin-arm64": "^18.4.0-beta.17",
+    "embedded-postgres": "^18.4.0-beta.17"
   }
 }
