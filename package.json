@@ -11,7 +11,8 @@
     "start": "node --no-warnings --env-file-if-exists=.env server/index.js",
     "dev": "node --no-warnings --env-file-if-exists=.env --watch server/index.js",
     "migrate": "node --no-warnings --env-file-if-exists=.env server/migrate.js",
-    "demo": "node --no-warnings server/demo.js"
+    "demo": "node --no-warnings server/demo.js",
+    "set-password": "node --no-warnings --env-file-if-exists=.env server/set-password.js"
   },
   "dependencies": {
     "pg": "^8.22.0"

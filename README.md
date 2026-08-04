@@ -72,8 +72,25 @@ Variables de entorno (**Settings → Environment Variables**):
 
 > **Los accesos al panel los crea `npm run migrate`**, con esas dos variables.
 > No hay usuario por defecto en el código: si la migración no ha corrido, la
-> tabla `users` no existe y el login responde 500. Y una vez creado el usuario,
-> volver a migrar con otra contraseña **no** la cambia.
+> tabla `users` no existe y el login responde 500.
+
+### Fijar o recuperar la contraseña
+
+Una vez creado el usuario, volver a migrar con otra contraseña **no** la cambia.
+Para fijarla (o crear otro usuario) contra la base de producción:
+
+```bash
+npm run set-password -- tu@correo.com TuContraseñaNueva
+```
+
+Usa el `DATABASE_URL` de tu `.env`. Si el usuario no existe, lo crea; si existe,
+actualiza la contraseña y cierra sus sesiones abiertas.
+
+Para ver qué usuarios hay:
+
+```bash
+node --env-file=.env -e "import('./server/db.js').then(async({all,closePool})=>{console.table(await all('SELECT email, role FROM users'));await closePool()})"
+```
 
 El enrutado lo define `vercel.json`: `/api/*` y `/p/*` van a la función
 serverless, todo lo demás lo sirve el CDN desde `public/`.
