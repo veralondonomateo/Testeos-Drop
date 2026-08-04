@@ -51,6 +51,20 @@ Variables de entorno (**Settings → Environment Variables**):
 El enrutado lo define `vercel.json`: `/api/*` y `/p/*` van a la función
 serverless, todo lo demás lo sirve el CDN desde `public/`.
 
+### Si algo falla
+
+Abre `https://tu-dominio.vercel.app/api/health`. Es público y no expone secretos;
+te dice exactamente qué falta:
+
+```json
+{ "database_url": "FALTA",  "siguiente_paso": "Añade DATABASE_URL en Vercel…" }
+{ "esquema": "FALTA",       "siguiente_paso": "Falta correr `npm run migrate`" }
+{ "ok": true }
+```
+
+La causa más común de un **500 al iniciar sesión** es que la migración no se
+corrió contra Supabase: la base existe pero no tiene tablas.
+
 ### Correr en local
 
 ```bash

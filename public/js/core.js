@@ -109,7 +109,11 @@ export const parseMoney = (v) => Math.round(Number(String(v ?? '').replace(/[^\d
 /* ── Cliente API ─────────────────────────────────────────────────────── */
 
 export class ApiError extends Error {
-  constructor(message, status) { super(message); this.status = status; }
+  constructor(message, status, hint) {
+    super(message);
+    this.status = status;
+    this.hint = hint;   // pista accionable del servidor (p. ej. "falta migrar")
+  }
 }
 
 async function request(method, path, body) {
@@ -120,7 +124,7 @@ async function request(method, path, body) {
   });
   const isJSON = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJSON ? await res.json().catch(() => ({})) : {};
-  if (!res.ok) throw new ApiError(data.error || `Error ${res.status}`, res.status);
+  if (!res.ok) throw new ApiError(data.error || `Error ${res.status}`, res.status, data.hint);
   return data;
 }
 

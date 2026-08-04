@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { PUBLIC_DIR, PORT, HOST, ORDER_STATUS, TEST_STATUS, VERDICTS } from './config.js';
-import { one, getSetting, setSetting } from './db.js';
+import { one, getSetting, setSetting, hasConnectionString, DbError } from './db.js';
 import {
   Router, readBody, json, text, html, parseCookies, cookie, serveStatic,
   HttpError, notFound, escapeHtml,
@@ -17,6 +17,44 @@ import { purgeDemoData, hasDemoData } from './seed.js';
 
 const router = new Router();
 const auth = (ctx) => Auth.requireAuth(ctx);
+
+/* ── Diagnóstico ──────────────────────────────────────────────────────────
+   Público a propósito y sin secretos: es lo primero que hay que mirar cuando
+   el despliegue responde 500. Dice si falta configuración o falta migrar.
+   ────────────────────────────────────────────────────────────────────── */
+
+router.get('/api/health', async ({ res }) => {
+  const out = {
+    ok: false,
+    database_url: hasConnectionString() ? 'configurada' : 'FALTA',
+    conexion: null,
+    esquema: null,
+    usuarios: null,
+    siguiente_paso: null,
+  };
+
+  if (!hasConnectionString()) {
+    out.siguiente_paso = 'Añade DATABASE_URL en Vercel → Settings → Environment Variables '
+      + '(usa el Transaction pooler de Supabase, puerto 6543) y vuelve a desplegar.';
+    return json(res, out, 503);
+  }
+
+  try {
+    const r = await one('SELECT COUNT(*) n FROM users');
+    out.conexion = 'ok';
+    out.esquema = 'ok';
+    out.usuarios = r.n;
+    out.ok = r.n > 0;
+    out.siguiente_paso = r.n > 0
+      ? null
+      : 'El esquema existe pero no hay usuarios. Corre `npm run migrate`.';
+  } catch (err) {
+    out.conexion = err instanceof DbError && err.message.includes('conectar') ? 'FALLA' : 'ok';
+    out.esquema = 'FALTA';
+    out.siguiente_paso = err.hint || err.message;
+  }
+  return json(res, out, out.ok ? 200 : 503);
+});
 
 /* ── Sesión ───────────────────────────────────────────────────────────── */
 
@@ -236,12 +274,15 @@ export async function handler(req, res) {
     throw notFound(`Ruta no encontrada: ${req.method} ${pathname}`);
   } catch (err) {
     if (res.writableEnded) return;
-    const status = err instanceof HttpError ? err.status : 500;
+    const status = err?.status ?? (err instanceof HttpError ? err.status : 500);
     if (status >= 500) console.error('[error]', err);
+    // La pista de DbError viaja al cliente: sin ella el panel sólo mostraría
+    // "Error 500" y no habría forma de saber que falta migrar.
+    const hint = err?.hint ?? null;
     if (pathname.startsWith('/api/')) {
-      json(res, { error: err.message || 'Error interno', details: err.details ?? null }, status);
+      json(res, { error: err.message || 'Error interno', hint, details: err.details ?? null }, status);
     } else {
-      text(res, err.message || 'Error interno', status);
+      text(res, [err.message, hint].filter(Boolean).join('\n\n') || 'Error interno', status);
     }
   }
 }

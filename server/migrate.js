@@ -5,7 +5,7 @@
  * en serverless ejecutar DDL en cada arranque en frío es un desperdicio y una
  * fuente de condiciones de carrera entre invocaciones concurrentes.
  */
-import { createSchema, pool } from './db.js';
+import { createSchema, closePool } from './db.js';
 import { ensureSeed } from './seed.js';
 
 const run = async () => {
@@ -17,12 +17,12 @@ const run = async () => {
   const seeded = await ensureSeed();
   console.log(seeded ? '  datos iniciales creados' : '  ya había datos, no se tocó nada');
 
-  await pool.end();
+  await closePool();
   console.log('\n✓ Migración completa.');
 };
 
 run().catch(async (err) => {
   console.error('\n✗ Falló la migración:', err.message);
-  await pool.end().catch(() => {});
+  await closePool().catch(() => {});
   process.exit(1);
 });

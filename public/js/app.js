@@ -51,6 +51,14 @@ function renderLogin(prefillError) {
       await boot();
     } catch (err) {
       errBox.append(el('span', { class: 'err', text: err.message }));
+      // Los fallos de configuración traen una pista con el paso siguiente
+      if (err.hint) {
+        errBox.append(el('span', {
+          class: 'help',
+          style: { marginTop: '6px', lineHeight: '1.5' },
+          text: err.hint,
+        }));
+      }
       btn.disabled = false;
       btn.textContent = 'Entrar al panel';
     }

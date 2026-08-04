@@ -27,29 +27,88 @@ const { Pool } = pg;
 pg.types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));    // int8 / bigint
 pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));    // numeric
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error(
-    'Falta DATABASE_URL. Cópiala desde Supabase → Project Settings → Database → '
-    + 'Connection string → Transaction pooler (puerto 6543) y ponla en .env o en '
-    + 'las variables de entorno de Vercel.'
-  );
+/** Error de configuración o de esquema: se traduce a un 503 con mensaje útil. */
+export class DbError extends Error {
+  constructor(message, hint) {
+    super(message);
+    this.status = 503;
+    this.hint = hint;
+  }
+}
+
+export const hasConnectionString = () => !!process.env.DATABASE_URL;
+
+/**
+ * El pool se crea de forma perezosa. Antes esto lanzaba al importar el módulo:
+ * en Vercel eso tumba la función entera y el navegador recibe un 500 mudo, sin
+ * pista de qué falta. Ahora el error llega como respuesta legible.
+ *
+ * En serverless cada invocación puede levantar su propia instancia, así que el
+ * pool se mantiene mínimo y se reutiliza vía globalThis. Con el pooler de
+ * Supabase (6543, modo transaction) esto evita agotar conexiones al escalar.
+ */
+export function getPool() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new DbError(
+      'La base de datos no está configurada.',
+      'Falta la variable DATABASE_URL. Cópiala desde Supabase → Project Settings → '
+      + 'Database → Connection string → Transaction pooler (puerto 6543) y añádela en '
+      + 'Vercel → Settings → Environment Variables.'
+    );
+  }
+  if (!globalThis.__dsPool) {
+    globalThis.__dsPool = new Pool({
+      connectionString,
+      max: process.env.VERCEL ? 1 : 10,
+      idleTimeoutMillis: 10_000,
+      connectionTimeoutMillis: 10_000,
+      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+    });
+  }
+  return globalThis.__dsPool;
+}
+
+export async function closePool() {
+  if (globalThis.__dsPool) {
+    await globalThis.__dsPool.end();
+    globalThis.__dsPool = null;
+  }
 }
 
 /**
- * En serverless cada invocación puede levantar su propia instancia, así que el
- * pool se mantiene mínimo y se reutiliza entre invocaciones vía globalThis.
- * Con el pooler de Supabase (6543, modo transaction) esto evita agotar
- * conexiones cuando Vercel escala.
+ * Traduce los errores crudos de Postgres a algo accionable.
+ * `42P01` = la tabla no existe, que en la práctica siempre significa que
+ * `npm run migrate` no se ha corrido contra esta base.
  */
-export const pool = globalThis.__dsPool ?? new Pool({
-  connectionString,
-  max: process.env.VERCEL ? 1 : 10,
-  idleTimeoutMillis: 10_000,
-  connectionTimeoutMillis: 10_000,
-  ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
-});
-globalThis.__dsPool = pool;
+function translate(err) {
+  if (err?.code === '42P01') {
+    return new DbError(
+      'La base de datos existe pero está vacía.',
+      'Falta correr la migración: `npm run migrate` con tu DATABASE_URL apuntando a Supabase.'
+    );
+  }
+  if (['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT'].includes(err?.code)) {
+    return new DbError(
+      'No se pudo conectar con la base de datos.',
+      'Revisa que DATABASE_URL use el pooler de Supabase (puerto 6543) y que la contraseña sea correcta.'
+    );
+  }
+  if (err?.code === '28P01') {
+    return new DbError('Contraseña de la base de datos incorrecta.',
+      'Revisa la contraseña dentro de DATABASE_URL.');
+  }
+  return err;
+}
+
+/** Ejecuta una consulta traduciendo los errores de configuración. */
+async function query(sql, params) {
+  try {
+    return await getPool().query(sql, params);
+  } catch (err) {
+    throw translate(err);
+  }
+}
 
 /** Traduce los `?` de SQLite a los `$n` que espera Postgres. */
 function toPg(sql) {
@@ -60,18 +119,18 @@ function toPg(sql) {
 /* ── Helpers de consulta ─────────────────────────────────────────────── */
 
 export async function all(sql, params = []) {
-  const res = await pool.query(toPg(sql), params);
+  const res = await query(toPg(sql), params);
   return res.rows;
 }
 
 export async function one(sql, params = []) {
-  const res = await pool.query(toPg(sql), params);
+  const res = await query(toPg(sql), params);
   return res.rows[0] ?? null;
 }
 
 /** Devuelve `{ changes }` para conservar la interfaz que tenía SQLite. */
 export async function run(sql, params = []) {
-  const res = await pool.query(toPg(sql), params);
+  const res = await query(toPg(sql), params);
   return { changes: res.rowCount ?? 0 };
 }
 
@@ -80,7 +139,7 @@ export async function insert(table, data) {
   const keys = Object.keys(data);
   const cols = keys.join(', ');
   const marks = keys.map((_, i) => `$${i + 1}`).join(', ');
-  await pool.query(`INSERT INTO ${table} (${cols}) VALUES (${marks})`, keys.map((k) => data[k]));
+  await query(`INSERT INTO ${table} (${cols}) VALUES (${marks})`, keys.map((k) => data[k]));
   return data;
 }
 
@@ -89,7 +148,7 @@ export async function update(table, id, data, allowed) {
   const keys = Object.keys(data).filter((k) => allowed.includes(k));
   if (!keys.length) return 0;
   const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-  const res = await pool.query(
+  const res = await query(
     `UPDATE ${table} SET ${sets} WHERE id = $${keys.length + 1}`,
     [...keys.map((k) => data[k]), id]
   );
@@ -98,7 +157,7 @@ export async function update(table, id, data, allowed) {
 
 /** Ejecuta varias sentencias dentro de una transacción. */
 export async function transaction(fn) {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     const result = await fn(client);
@@ -136,7 +195,7 @@ export async function setSetting(key, value) {
  * y una fuente de condiciones de carrera.
  */
 export async function createSchema() {
-  await pool.query(`
+  await getPool().query(`
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
   email         TEXT UNIQUE NOT NULL,
