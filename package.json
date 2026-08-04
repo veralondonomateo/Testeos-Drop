@@ -1,0 +1,14 @@
+{
+  "name": "dropstudio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DropStudio — plataforma de testeo de productos (landings, pedidos COD, analítica).",
+  "type": "module",
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "seed": "node --no-warnings server/seed.js",
+    "reset": "rm -f data/drop.db && node --no-warnings server/seed.js"
+  }
+}

@@ -1,0 +1,36 @@
+# ── Base de datos ──────────────────────────────────────────────────────
+# Se regenera sola al arrancar (ensureSeed). Nunca versionar: contiene
+# pedidos y datos de clientes reales una vez esté en producción.
+data/drop.db
+data/drop.db-wal
+data/drop.db-shm
+
+# ── Landings generadas ─────────────────────────────────────────────────
+# Se escriben desde server/landing/plasma.js al sembrar, y el panel las
+# reescribe al editarlas. El código fuente de la landing sí está versionado.
+data/pages/
+
+# NOTA: data/assets/ SÍ va al repo — son las imágenes del producto, del
+# médico y de los testimonios. No se regeneran desde código.
+
+# ── Entorno y secretos ─────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Dependencias y build ───────────────────────────────────────────────
+node_modules/
+dist/
+.vercel/
+.turbo/
+
+# ── Sistema y editores ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.log
+npm-debug.log*
