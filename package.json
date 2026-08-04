@@ -4,11 +4,15 @@
   "private": true,
   "description": "DropStudio — plataforma de testeo de productos (landings, pedidos COD, analítica).",
   "type": "module",
-  "engines": { "node": ">=22.5.0" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
-    "start": "node --no-warnings server/index.js",
-    "dev": "node --no-warnings --watch server/index.js",
-    "seed": "node --no-warnings server/seed.js",
-    "reset": "rm -f data/drop.db && node --no-warnings server/seed.js"
+    "start": "node --no-warnings --env-file-if-exists=.env server/index.js",
+    "dev": "node --no-warnings --env-file-if-exists=.env --watch server/index.js",
+    "migrate": "node --no-warnings --env-file-if-exists=.env server/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.22.0"
   }
 }

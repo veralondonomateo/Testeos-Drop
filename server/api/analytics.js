@@ -2,7 +2,7 @@ import { all, one } from '../db.js';
 import { rangeBounds, dayRange, dayKey } from '../lib/util.js';
 
 /**
- * Todas las métricas de analítica se calculan sobre un rango de fechas.
+ * Todas las métricas se calculan sobre un rango de fechas.
  * `previous` es el mismo número de días inmediatamente anterior, para los deltas.
  */
 function bounds(range) {
@@ -15,23 +15,26 @@ function bounds(range) {
 
 const iso = (d) => d.toISOString();
 
-function orderStats(from, to, filters = {}) {
+async function orderStats(from, to, filters = {}) {
   const where = ['o.created_at >= ?', 'o.created_at <= ?'];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('o.product_id = ?'); params.push(filters.product_id); }
   if (filters.test_id) { where.push('o.test_id = ?'); params.push(filters.test_id); }
   const w = where.join(' AND ');
-  const total = one(`SELECT COUNT(*) orders, COALESCE(SUM(o.total),0) gross FROM orders o WHERE ${w} AND o.status != 'cancelled'`, params);
-  const del = one(`SELECT COUNT(*) delivered, COALESCE(SUM(o.total),0) revenue, COALESCE(SUM(o.cost_total),0) cogs FROM orders o WHERE ${w} AND o.status = 'delivered'`, params);
+  const [total, del] = await Promise.all([
+    one(`SELECT COUNT(*) orders, COALESCE(SUM(o.total),0) gross FROM orders o WHERE ${w} AND o.status != 'cancelled'`, params),
+    one(`SELECT COUNT(*) delivered, COALESCE(SUM(o.total),0) revenue, COALESCE(SUM(o.cost_total),0) cogs FROM orders o WHERE ${w} AND o.status = 'delivered'`, params),
+  ]);
   return { ...total, ...del };
 }
 
-function eventCount(type, from, to, filters = {}) {
+async function eventCount(type, from, to, filters = {}) {
   const where = ['type = ?', 'created_at >= ?', 'created_at <= ?'];
   const params = [type, iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
   if (filters.test_id) { where.push('test_id = ?'); params.push(filters.test_id); }
-  return one(`SELECT COUNT(DISTINCT session_id) n FROM events WHERE ${where.join(' AND ')}`, params).n;
+  const r = await one(`SELECT COUNT(DISTINCT session_id) n FROM events WHERE ${where.join(' AND ')}`, params);
+  return r.n;
 }
 
 function spendTotal(from, to, filters = {}) {
@@ -39,8 +42,8 @@ function spendTotal(from, to, filters = {}) {
   const params = [dayKey(from), dayKey(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
   if (filters.test_id) { where.push('test_id = ?'); params.push(filters.test_id); }
-  const r = one(`SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(clicks),0) clicks, COALESCE(SUM(impressions),0) impressions FROM ad_spend WHERE ${where.join(' AND ')}`, params);
-  return r;
+  return one(`SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(clicks),0) clicks,
+              COALESCE(SUM(impressions),0) impressions FROM ad_spend WHERE ${where.join(' AND ')}`, params);
 }
 
 /**
@@ -50,70 +53,93 @@ function spendTotal(from, to, filters = {}) {
  */
 const pct = (now, before) => (before > 0 ? +(((now - before) / before) * 100).toFixed(1) : null);
 
-export function overview(range = '30d', filters = {}) {
+export async function overview(range = '30d', filters = {}) {
   const { start, end, days, prevStart, prevEnd } = bounds(range);
 
-  const cur = orderStats(start, end, filters);
-  const prev = orderStats(prevStart, prevEnd, filters);
-  const views = eventCount('pageview', start, end, filters);
-  const prevViews = eventCount('pageview', prevStart, prevEnd, filters);
-  const checkouts = eventCount('checkout_open', start, end, filters);
-  const spend = spendTotal(start, end, filters);
-  const prevSpend = spendTotal(prevStart, prevEnd, filters);
+  const [cur, prev, views, prevViews, checkouts, spend, prevSpend] = await Promise.all([
+    orderStats(start, end, filters),
+    orderStats(prevStart, prevEnd, filters),
+    eventCount('pageview', start, end, filters),
+    eventCount('pageview', prevStart, prevEnd, filters),
+    eventCount('checkout_open', start, end, filters),
+    spendTotal(start, end, filters),
+    spendTotal(prevStart, prevEnd, filters),
+  ]);
 
   const profit = cur.revenue - cur.cogs - spend.spend;
   const prevProfit = prev.revenue - prev.cogs - prevSpend.spend;
 
   const kpis = {
-    revenue:   { value: cur.revenue,  delta: pct(cur.revenue, prev.revenue) },
-    orders:    { value: cur.orders,   delta: pct(cur.orders, prev.orders) },
-    profit:    { value: profit,       delta: pct(profit, prevProfit) },
-    spend:     { value: spend.spend,  delta: pct(spend.spend, prevSpend.spend) },
-    views:     { value: views,        delta: pct(views, prevViews) },
-    cr:        { value: views ? +(cur.orders / views * 100).toFixed(2) : 0,
-                 delta: pct(views ? cur.orders / views : 0, prevViews ? prev.orders / prevViews : 0) },
-    cpa:       { value: cur.orders ? Math.round(spend.spend / cur.orders) : 0,
-                 delta: pct(cur.orders ? spend.spend / cur.orders : 0, prev.orders ? prevSpend.spend / prev.orders : 0) },
-    roas:      { value: spend.spend ? +(cur.revenue / spend.spend).toFixed(2) : 0,
-                 delta: pct(spend.spend ? cur.revenue / spend.spend : 0, prevSpend.spend ? prev.revenue / prevSpend.spend : 0) },
-    aov:       { value: cur.orders ? Math.round(cur.gross / cur.orders) : 0,
-                 delta: pct(cur.orders ? cur.gross / cur.orders : 0, prev.orders ? prev.gross / prev.orders : 0) },
-    delivery:  { value: cur.orders ? +(cur.delivered / cur.orders * 100).toFixed(1) : 0, delta: 0 },
+    revenue: { value: cur.revenue, delta: pct(cur.revenue, prev.revenue) },
+    orders:  { value: cur.orders, delta: pct(cur.orders, prev.orders) },
+    profit:  { value: profit, delta: pct(profit, prevProfit) },
+    spend:   { value: spend.spend, delta: pct(spend.spend, prevSpend.spend) },
+    views:   { value: views, delta: pct(views, prevViews) },
+    cr:      {
+      value: views ? +(cur.orders / views * 100).toFixed(2) : 0,
+      delta: pct(views ? cur.orders / views : 0, prevViews ? prev.orders / prevViews : 0),
+    },
+    cpa:     {
+      value: cur.orders ? Math.round(spend.spend / cur.orders) : 0,
+      delta: pct(cur.orders ? spend.spend / cur.orders : 0, prev.orders ? prevSpend.spend / prev.orders : 0),
+    },
+    roas:    {
+      value: spend.spend ? +(cur.revenue / spend.spend).toFixed(2) : 0,
+      delta: pct(spend.spend ? cur.revenue / spend.spend : 0, prevSpend.spend ? prev.revenue / prevSpend.spend : 0),
+    },
+    aov:     {
+      value: cur.orders ? Math.round(cur.gross / cur.orders) : 0,
+      delta: pct(cur.orders ? cur.gross / cur.orders : 0, prev.orders ? prev.gross / prev.orders : 0),
+    },
+    delivery: { value: cur.orders ? +(cur.delivered / cur.orders * 100).toFixed(1) : 0, delta: null },
   };
+
+  const [series, funnelData, byStatus, topProd, topPg, cities, sources, devices] = await Promise.all([
+    dailySeries(days, filters),
+    funnel(start, end, filters, checkouts, views, cur.orders),
+    statusBreakdown(start, end, filters),
+    topProducts(start, end),
+    topPages(start, end),
+    byCity(start, end, filters),
+    bySource(start, end, filters),
+    byDevice(start, end, filters),
+  ]);
 
   return {
     range, from: dayKey(start), to: dayKey(end),
     kpis,
-    series: dailySeries(days, filters),
-    funnel: funnel(start, end, filters, checkouts, views, cur.orders),
-    by_status: statusBreakdown(start, end, filters),
-    top_products: topProducts(start, end),
-    top_pages: topPages(start, end),
-    by_city: byCity(start, end, filters),
-    by_source: bySource(start, end, filters),
-    by_device: byDevice(start, end, filters),
+    series,
+    funnel: funnelData,
+    by_status: byStatus,
+    top_products: topProd,
+    top_pages: topPg,
+    by_city: cities,
+    by_source: sources,
+    by_device: devices,
   };
 }
 
 /** Serie diaria: visitas, pedidos, ingresos e inversión — una fila por día. */
-export function dailySeries(days, filters = {}) {
+export async function dailySeries(days, filters = {}) {
   const fp = [];
   const fw = [];
   if (filters.product_id) { fw.push('product_id = ?'); fp.push(filters.product_id); }
   if (filters.test_id) { fw.push('test_id = ?'); fp.push(filters.test_id); }
   const extra = fw.length ? ' AND ' + fw.join(' AND ') : '';
 
-  const viewsRows = all(`SELECT substr(created_at,1,10) d, COUNT(DISTINCT session_id) n
-                         FROM events WHERE type = 'pageview'${extra} GROUP BY d`, fp);
-  const orderRows = all(`SELECT substr(created_at,1,10) d, COUNT(*) n, COALESCE(SUM(total),0) gross
-                         FROM orders WHERE status != 'cancelled'${extra} GROUP BY d`, fp);
-  const revRows = all(`SELECT substr(created_at,1,10) d, COALESCE(SUM(total),0) rev
-                       FROM orders WHERE status = 'delivered'${extra} GROUP BY d`, fp);
-  const spendRows = all(`SELECT date d, COALESCE(SUM(spend),0) s FROM ad_spend WHERE 1=1${extra} GROUP BY d`, fp);
+  const [viewsRows, orderRows, revRows, spendRows] = await Promise.all([
+    all(`SELECT substr(created_at,1,10) d, COUNT(DISTINCT session_id) n
+         FROM events WHERE type = 'pageview'${extra} GROUP BY 1`, fp),
+    all(`SELECT substr(created_at,1,10) d, COUNT(*) n, COALESCE(SUM(total),0) gross
+         FROM orders WHERE status != 'cancelled'${extra} GROUP BY 1`, fp),
+    all(`SELECT substr(created_at,1,10) d, COALESCE(SUM(total),0) rev
+         FROM orders WHERE status = 'delivered'${extra} GROUP BY 1`, fp),
+    all(`SELECT date d, COALESCE(SUM(spend),0) s FROM ad_spend WHERE 1=1${extra} GROUP BY 1`, fp),
+  ]);
 
   const map = (rows, key) => Object.fromEntries(rows.map((r) => [r.d, r[key]]));
   const V = map(viewsRows, 'n'), O = map(orderRows, 'n'), G = map(orderRows, 'gross'),
-        R = map(revRows, 'rev'), S = map(spendRows, 's');
+    R = map(revRows, 'rev'), S = map(spendRows, 's');
 
   return days.map((d) => ({
     date: d,
@@ -125,13 +151,13 @@ export function dailySeries(days, filters = {}) {
   }));
 }
 
-function funnel(from, to, filters, checkouts, views, orders) {
-  const cta = eventCount('cta_click', from, to, filters);
+async function funnel(from, to, filters, checkouts, views, orders) {
+  const cta = await eventCount('cta_click', from, to, filters);
   return [
-    { stage: 'Visitas',            value: views },
-    { stage: 'Clic en comprar',    value: cta },
-    { stage: 'Checkout abierto',   value: checkouts },
-    { stage: 'Pedidos',            value: orders },
+    { stage: 'Visitas', value: views },
+    { stage: 'Clic en comprar', value: cta },
+    { stage: 'Checkout abierto', value: checkouts },
+    { stage: 'Pedidos', value: orders },
   ];
 }
 
@@ -150,15 +176,19 @@ function topProducts(from, to) {
                      COALESCE(SUM(CASE WHEN o.status='delivered' THEN o.total ELSE 0 END),0) revenue
               FROM orders o JOIN products p ON p.id = o.product_id
               WHERE o.created_at >= ? AND o.created_at <= ? AND o.status != 'cancelled'
-              GROUP BY p.id ORDER BY orders DESC LIMIT 8`, [iso(from), iso(to)]);
+              GROUP BY p.id, p.name, p.image ORDER BY orders DESC LIMIT 8`, [iso(from), iso(to)]);
 }
 
 function topPages(from, to) {
   return all(`SELECT pg.id, pg.title, pg.slug, pg.variant,
-                     (SELECT COUNT(DISTINCT session_id) FROM events e WHERE e.page_id = pg.id AND e.type='pageview' AND e.created_at >= ? AND e.created_at <= ?) views,
-                     (SELECT COUNT(*) FROM orders o WHERE o.page_id = pg.id AND o.status != 'cancelled' AND o.created_at >= ? AND o.created_at <= ?) orders
+                     (SELECT COUNT(DISTINCT session_id) FROM events e
+                       WHERE e.page_id = pg.id AND e.type='pageview'
+                         AND e.created_at >= ? AND e.created_at <= ?) views,
+                     (SELECT COUNT(*) FROM orders o
+                       WHERE o.page_id = pg.id AND o.status != 'cancelled'
+                         AND o.created_at >= ? AND o.created_at <= ?) orders
               FROM pages pg ORDER BY views DESC LIMIT 8`,
-    [iso(from), iso(to), iso(from), iso(to)]);
+  [iso(from), iso(to), iso(from), iso(to)]);
 }
 
 function byCity(from, to, filters) {
@@ -175,7 +205,7 @@ function bySource(from, to, filters) {
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
   return all(`SELECT CASE WHEN utm_source = '' THEN 'directo' ELSE utm_source END source,
                      COUNT(*) n, COALESCE(SUM(total),0) total
-              FROM orders WHERE ${where.join(' AND ')} GROUP BY source ORDER BY n DESC LIMIT 8`, params);
+              FROM orders WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY n DESC LIMIT 8`, params);
 }
 
 function byDevice(from, to, filters) {
@@ -184,7 +214,7 @@ function byDevice(from, to, filters) {
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
   return all(`SELECT CASE WHEN device = '' THEN 'desconocido' ELSE device END device,
                      COUNT(DISTINCT session_id) n
-              FROM events WHERE ${where.join(' AND ')} GROUP BY device ORDER BY n DESC`, params);
+              FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY n DESC`, params);
 }
 
 /* ── Comparativa de variantes ─────────────────────────────────────────── */
@@ -217,8 +247,8 @@ export function significance(convA, viewsA, convB, viewsB) {
  * Todas las variantes de un testeo con sus métricas y su confianza estadística
  * frente a la que va ganando. Es lo que alimenta el módulo de Test A/B.
  */
-export function variantBreakdown(testId) {
-  const rows = all(`
+export async function variantBreakdown(testId) {
+  const rows = await all(`
     SELECT pg.id, pg.variant, pg.title, pg.slug, pg.status,
            (SELECT COUNT(DISTINCT session_id) FROM events e
              WHERE e.page_id = pg.id AND e.type = 'pageview') views,

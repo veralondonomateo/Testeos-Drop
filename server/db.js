@@ -1,19 +1,142 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import { DATA_DIR, DB_FILE } from './config.js';
-
-mkdirSync(DATA_DIR, { recursive: true });
-
-export const db = new DatabaseSync(DB_FILE);
-
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+import pg from 'pg';
 
 /**
- * Esquema. Todo el dinero se guarda en enteros (centavos/pesos sin decimales)
- * para evitar errores de coma flotante — COP no usa decimales en la práctica.
+ * Capa de datos — Postgres (Supabase).
+ *
+ * Los helpers conservan la firma que tenían con SQLite (`all` / `one` / `run` /
+ * `insert` / `update`) para que los módulos de API no cambien de forma; lo único
+ * que cambia es que ahora devuelven promesas.
+ *
+ * Dos decisiones que reducen la superficie de la migración:
+ *
+ *  1. Los marcadores siguen siendo `?`. `toPg()` los traduce a `$1, $2, …`
+ *     antes de enviar la consulta, así que ninguna llamada tuvo que reescribirse.
+ *  2. Las fechas se guardan como TEXT en ISO 8601. Ordenan y comparan
+ *     lexicográficamente igual que cronológicamente, así que los `substr()`,
+ *     los `BETWEEN` y los `GROUP BY` de analítica siguen funcionando idénticos.
  */
-db.exec(`
+
+const { Pool } = pg;
+
+/**
+ * Por defecto node-postgres devuelve bigint (COUNT) y numeric (SUM) como
+ * strings para no perder precisión. Aquí todos los valores son enteros de
+ * pesos y conteos muy por debajo del entero seguro de JS, así que se parsean
+ * a número: sin esto, cualquier `a + b` sobre un SUM concatenaría texto.
+ */
+pg.types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));    // int8 / bigint
+pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));    // numeric
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error(
+    'Falta DATABASE_URL. Cópiala desde Supabase → Project Settings → Database → '
+    + 'Connection string → Transaction pooler (puerto 6543) y ponla en .env o en '
+    + 'las variables de entorno de Vercel.'
+  );
+}
+
+/**
+ * En serverless cada invocación puede levantar su propia instancia, así que el
+ * pool se mantiene mínimo y se reutiliza entre invocaciones vía globalThis.
+ * Con el pooler de Supabase (6543, modo transaction) esto evita agotar
+ * conexiones cuando Vercel escala.
+ */
+export const pool = globalThis.__dsPool ?? new Pool({
+  connectionString,
+  max: process.env.VERCEL ? 1 : 10,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 10_000,
+  ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+});
+globalThis.__dsPool = pool;
+
+/** Traduce los `?` de SQLite a los `$n` que espera Postgres. */
+function toPg(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+/* ── Helpers de consulta ─────────────────────────────────────────────── */
+
+export async function all(sql, params = []) {
+  const res = await pool.query(toPg(sql), params);
+  return res.rows;
+}
+
+export async function one(sql, params = []) {
+  const res = await pool.query(toPg(sql), params);
+  return res.rows[0] ?? null;
+}
+
+/** Devuelve `{ changes }` para conservar la interfaz que tenía SQLite. */
+export async function run(sql, params = []) {
+  const res = await pool.query(toPg(sql), params);
+  return { changes: res.rowCount ?? 0 };
+}
+
+/** INSERT genérico a partir de un objeto plano. */
+export async function insert(table, data) {
+  const keys = Object.keys(data);
+  const cols = keys.join(', ');
+  const marks = keys.map((_, i) => `$${i + 1}`).join(', ');
+  await pool.query(`INSERT INTO ${table} (${cols}) VALUES (${marks})`, keys.map((k) => data[k]));
+  return data;
+}
+
+/** UPDATE genérico por id, ignorando claves no permitidas. */
+export async function update(table, id, data, allowed) {
+  const keys = Object.keys(data).filter((k) => allowed.includes(k));
+  if (!keys.length) return 0;
+  const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+  const res = await pool.query(
+    `UPDATE ${table} SET ${sets} WHERE id = $${keys.length + 1}`,
+    [...keys.map((k) => data[k]), id]
+  );
+  return res.rowCount ?? 0;
+}
+
+/** Ejecuta varias sentencias dentro de una transacción. */
+export async function transaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/* ── Ajustes ─────────────────────────────────────────────────────────── */
+
+export async function getSetting(key, fallback = null) {
+  const row = await one('SELECT value FROM settings WHERE key = ?', [key]);
+  if (!row) return fallback;
+  try { return JSON.parse(row.value); } catch { return row.value; }
+}
+
+export async function setSetting(key, value) {
+  await run(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, JSON.stringify(value)]
+  );
+}
+
+/* ── Esquema ─────────────────────────────────────────────────────────── */
+
+/**
+ * Crea el esquema si no existe. Se ejecuta desde `npm run migrate`, nunca en
+ * caliente: en serverless correr DDL en cada arranque en frío es un desperdicio
+ * y una fuente de condiciones de carrera.
+ */
+export async function createSchema() {
+  await pool.query(`
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
   email         TEXT UNIQUE NOT NULL,
@@ -79,6 +202,8 @@ CREATE TABLE IF NOT EXISTS tests (
   updated_at  TEXT NOT NULL
 );
 
+-- El HTML vive en la base, no en disco: en serverless el sistema de
+-- archivos es de solo lectura y no se comparte entre invocaciones.
 CREATE TABLE IF NOT EXISTS pages (
   id           TEXT PRIMARY KEY,
   slug         TEXT UNIQUE NOT NULL,
@@ -88,7 +213,7 @@ CREATE TABLE IF NOT EXISTS pages (
   variant      TEXT NOT NULL DEFAULT 'A',
   type         TEXT NOT NULL DEFAULT 'landing',
   status       TEXT NOT NULL DEFAULT 'draft',
-  file         TEXT NOT NULL,
+  html         TEXT NOT NULL DEFAULT '',
   notes        TEXT DEFAULT '',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
@@ -96,17 +221,17 @@ CREATE TABLE IF NOT EXISTS pages (
 );
 
 CREATE TABLE IF NOT EXISTS customers (
-  id           TEXT PRIMARY KEY,
-  phone        TEXT UNIQUE NOT NULL,
-  name         TEXT NOT NULL,
-  email        TEXT DEFAULT '',
-  department   TEXT DEFAULT '',
-  city         TEXT DEFAULT '',
-  address      TEXT DEFAULT '',
-  orders_count INTEGER NOT NULL DEFAULT 0,
-  total_spent  INTEGER NOT NULL DEFAULT 0,
-  tags         TEXT DEFAULT '',
-  created_at   TEXT NOT NULL,
+  id            TEXT PRIMARY KEY,
+  phone         TEXT UNIQUE NOT NULL,
+  name          TEXT NOT NULL,
+  email         TEXT DEFAULT '',
+  department    TEXT DEFAULT '',
+  city          TEXT DEFAULT '',
+  address       TEXT DEFAULT '',
+  orders_count  INTEGER NOT NULL DEFAULT 0,
+  total_spent   INTEGER NOT NULL DEFAULT 0,
+  tags          TEXT DEFAULT '',
+  created_at    TEXT NOT NULL,
   last_order_at TEXT
 );
 
@@ -156,19 +281,19 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-  id         TEXT PRIMARY KEY,
-  type       TEXT NOT NULL,
-  page_id    TEXT,
-  product_id TEXT,
-  test_id    TEXT,
-  session_id TEXT NOT NULL,
-  variant    TEXT DEFAULT 'A',
-  device     TEXT DEFAULT '',
-  utm_source TEXT DEFAULT '',
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL,
+  page_id      TEXT,
+  product_id   TEXT,
+  test_id      TEXT,
+  session_id   TEXT NOT NULL,
+  variant      TEXT DEFAULT 'A',
+  device       TEXT DEFAULT '',
+  utm_source   TEXT DEFAULT '',
   utm_campaign TEXT DEFAULT '',
-  value      INTEGER NOT NULL DEFAULT 0,
-  is_demo    INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL
+  value        INTEGER NOT NULL DEFAULT 0,
+  is_demo      INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ad_spend (
@@ -188,44 +313,15 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_orders_created  ON orders(created_at);
-CREATE INDEX IF NOT EXISTS idx_orders_status   ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_test     ON orders(test_id);
-CREATE INDEX IF NOT EXISTS idx_events_created  ON events(created_at);
-CREATE INDEX IF NOT EXISTS idx_events_type     ON events(type);
-CREATE INDEX IF NOT EXISTS idx_events_page     ON events(page_id);
-CREATE INDEX IF NOT EXISTS idx_spend_date      ON ad_spend(date);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_test    ON orders(test_id);
+CREATE INDEX IF NOT EXISTS idx_orders_page    ON orders(page_id);
+CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
+CREATE INDEX IF NOT EXISTS idx_events_page    ON events(page_id);
+CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+CREATE INDEX IF NOT EXISTS idx_spend_date     ON ad_spend(date);
+CREATE INDEX IF NOT EXISTS idx_sessions_user  ON sessions(user_id);
 `);
-
-/* ── Helpers de consulta ─────────────────────────────────────────────── */
-
-export const all = (sql, params = []) => db.prepare(sql).all(...params);
-export const one = (sql, params = []) => db.prepare(sql).get(...params) ?? null;
-export const run = (sql, params = []) => db.prepare(sql).run(...params);
-
-/** INSERT genérico a partir de un objeto plano. */
-export function insert(table, data) {
-  const keys = Object.keys(data);
-  const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`;
-  db.prepare(sql).run(...keys.map((k) => data[k]));
-  return data;
-}
-
-/** UPDATE genérico por id, ignorando claves no permitidas. */
-export function update(table, id, data, allowed) {
-  const keys = Object.keys(data).filter((k) => allowed.includes(k));
-  if (!keys.length) return 0;
-  const sql = `UPDATE ${table} SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`;
-  return db.prepare(sql).run(...keys.map((k) => data[k]), id).changes;
-}
-
-export function getSetting(key, fallback = null) {
-  const row = one('SELECT value FROM settings WHERE key = ?', [key]);
-  if (!row) return fallback;
-  try { return JSON.parse(row.value); } catch { return row.value; }
-}
-
-export function setSetting(key, value) {
-  run('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    [key, JSON.stringify(value)]);
 }

@@ -1,19 +1,5 @@
-# ── Base de datos ──────────────────────────────────────────────────────
-# Se regenera sola al arrancar (ensureSeed). Nunca versionar: contiene
-# pedidos y datos de clientes reales una vez esté en producción.
-data/drop.db
-data/drop.db-wal
-data/drop.db-shm
-
-# ── Landings generadas ─────────────────────────────────────────────────
-# Se escriben desde server/landing/plasma.js al sembrar, y el panel las
-# reescribe al editarlas. El código fuente de la landing sí está versionado.
-data/pages/
-
-# NOTA: data/assets/ SÍ va al repo — son las imágenes del producto, del
-# médico y de los testimonios. No se regeneran desde código.
-
 # ── Entorno y secretos ─────────────────────────────────────────────────
+# DATABASE_URL trae la contraseña de Postgres: nunca al repositorio.
 .env
 .env.*
 !.env.example
@@ -25,6 +11,11 @@ node_modules/
 dist/
 .vercel/
 .turbo/
+
+# ── Utilidades locales de prueba ───────────────────────────────────────
+# Postgres embebido que se usa sólo para probar la migración en local.
+.pgtest.mjs
+pgdata/
 
 # ── Sistema y editores ─────────────────────────────────────────────────
 .DS_Store

@@ -5,12 +5,12 @@ import { createOrder } from './orders.js';
 const ALLOWED = new Set(['pageview', 'scroll_50', 'scroll_90', 'cta_click', 'checkout_open', 'checkout_abandon', 'order']);
 
 /** Registra un evento de la landing pública. Silencioso ante datos basura. */
-export function trackEvent(body, req) {
+export async function trackEvent(body, req) {
   const type = clean(body.type, 30);
   if (!ALLOWED.has(type)) return { ok: false };
 
-  const page = body.page_id ? one('SELECT * FROM pages WHERE id = ?', [body.page_id]) : null;
-  insert('events', {
+  const page = body.page_id ? await one('SELECT * FROM pages WHERE id = ?', [body.page_id]) : null;
+  await insert('events', {
     id: id('evt'),
     type,
     page_id: page?.id ?? null,
@@ -22,18 +22,19 @@ export function trackEvent(body, req) {
     utm_source: clean(body.utm_source, 80),
     utm_campaign: clean(body.utm_campaign, 120),
     value: toInt(body.value),
+    is_demo: 0,
     created_at: nowISO(),
   });
   return { ok: true };
 }
 
 /** Recibe el pedido enviado desde el formulario de la landing. */
-export function trackOrder(body, req) {
-  const order = createOrder({
+export async function trackOrder(body, req) {
+  const order = await createOrder({
     ...body,
     device: clean(body.device, 20) || detectDevice(req.headers['user-agent'] || ''),
   }, { source: 'landing', actor: 'landing' });
 
-  trackEvent({ ...body, type: 'order', value: order.total }, req);
+  await trackEvent({ ...body, type: 'order', value: order.total }, req);
   return { ok: true, code: order.code, id: order.id, total: order.total };
 }

@@ -1,7 +1,4 @@
-import { writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { ROOT, PAGES_DIR } from './config.js';
-import { db, all, one, run, insert, getSetting, setSetting } from './db.js';
+import { all, one, run, insert, getSetting, setSetting, createSchema, transaction } from './db.js';
 import { id, nowISO, orderCode, hashPassword, dayKey } from './lib/util.js';
 import { renderPlasmaLanding, VARIANTS, VARIANT_CODES } from './landing/plasma.js';
 
@@ -31,7 +28,7 @@ const rnd = () => (seedState = (seedState * 1103515245 + 12345) % 2147483648) / 
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 const between = (a, b) => Math.floor(a + rnd() * (b - a + 1));
 
-function seedDemoData({ product, page, test, offers }) {
+async function seedDemoData({ product, page, test, offers }) {
   // 70 días para que la comparación "vs periodo anterior" a 30 días sea justa
   const DAYS = 70;
   const statusPool = [
@@ -52,7 +49,7 @@ function seedDemoData({ product, page, test, offers }) {
     const sessions = Math.round(between(70, 130) * ramp * weekend);
 
     // Inversión publicitaria del día
-    insert('ad_spend', {
+    await insert('ad_spend', {
       id: id('spd'), test_id: test.id, product_id: product.id, date: day,
       channel: 'meta',
       spend: Math.round(sessions * between(900, 1400) / 100) * 100,
@@ -69,7 +66,7 @@ function seedDemoData({ product, page, test, offers }) {
       const device = rnd() < 0.82 ? 'mobile' : rnd() < 0.6 ? 'desktop' : 'tablet';
       const source = rnd() < 0.86 ? 'facebook' : rnd() < 0.5 ? 'instagram' : 'directo';
 
-      const ev = (type, at) => insert('events', {
+      const ev = async (type, at) => insert('events', {
         id: id('evt'), type, page_id: page.id, product_id: product.id, test_id: test.id,
         session_id: sid, variant: 'A', device, utm_source: source, utm_campaign: 'plasma-corazon-frio',
         value: 0, is_demo: 1, created_at: at.toISOString(),
@@ -94,18 +91,18 @@ function seedDemoData({ product, page, test, offers }) {
             const status = pick(statusPool);
             const createdAt = new Date(ts.getTime() + 180000).toISOString();
 
-            let customer = one('SELECT * FROM customers WHERE phone = ?', [phone]);
+            let customer = await one('SELECT * FROM customers WHERE phone = ?', [phone]);
             if (!customer) {
               customer = {
                 id: id('cus'), phone, name, email: '', department: dept, city,
                 address: `Calle ${between(1, 180)} # ${between(1, 90)}-${between(1, 90)}`,
                 orders_count: 0, total_spent: 0, tags: 'demo', created_at: createdAt, last_order_at: createdAt,
               };
-              insert('customers', customer);
+              await insert('customers', customer);
             }
-            run('UPDATE customers SET orders_count = orders_count + 1, last_order_at = ? WHERE id = ?', [createdAt, customer.id]);
+            await run('UPDATE customers SET orders_count = orders_count + 1, last_order_at = ? WHERE id = ?', [createdAt, customer.id]);
             if (status === 'delivered') {
-              run('UPDATE customers SET total_spent = total_spent + ? WHERE id = ?', [offer.price, customer.id]);
+              await run('UPDATE customers SET total_spent = total_spent + ? WHERE id = ?', [offer.price, customer.id]);
             }
 
             const order = {
@@ -123,12 +120,12 @@ function seedDemoData({ product, page, test, offers }) {
               device, session_id: sid, is_demo: 1,
               created_at: createdAt, updated_at: createdAt,
             };
-            insert('orders', order);
-            insert('order_events', {
+            await insert('orders', order);
+            await insert('order_events', {
               id: id('oev'), order_id: order.id, type: 'created',
               message: 'Pedido recibido desde la landing', actor: 'landing', created_at: createdAt,
             });
-            insert('events', {
+            await insert('events', {
               id: id('evt'), type: 'order', page_id: page.id, product_id: product.id, test_id: test.id,
               session_id: sid, variant: 'A', device, utm_source: source, utm_campaign: 'plasma-corazon-frio',
               value: offer.price, is_demo: 1, created_at: createdAt,
@@ -147,7 +144,7 @@ function seedDemoData({ product, page, test, offers }) {
  * el módulo de Test A/B tenga los tres casos que importan: una variante que ya
  * gana con confianza, una que pierde, y una sin muestra suficiente para decidir.
  */
-function seedVariantTraffic({ product, test, offers, pages }) {
+async function seedVariantTraffic({ product, test, offers, pages }) {
   const PLAN = {
     B: { sessions: 900, cr: 0.033, days: 26 },   // gana
     C: { sessions: 820, cr: 0.020, days: 26 },   // pierde
@@ -170,7 +167,7 @@ function seedVariantTraffic({ product, test, offers, pages }) {
       const device = rnd() < 0.83 ? 'mobile' : 'desktop';
       const source = rnd() < 0.88 ? 'facebook' : 'instagram';
 
-      const ev = (type, at, value = 0) => insert('events', {
+      const ev = async (type, at, value = 0) => insert('events', {
         id: id('evt'), type, page_id: page.id, product_id: product.id, test_id: test.id,
         session_id: sid, variant: page.variant, device, utm_source: source,
         utm_campaign: `plasma-${page.variant.toLowerCase()}`, value,
@@ -192,18 +189,18 @@ function seedVariantTraffic({ product, test, offers, pages }) {
       const status = pick(statusPool);
       const createdAt = new Date(ts.getTime() + 180000).toISOString();
 
-      let customer = one('SELECT * FROM customers WHERE phone = ?', [phone]);
+      let customer = await one('SELECT * FROM customers WHERE phone = ?', [phone]);
       if (!customer) {
         customer = {
           id: id('cus'), phone, name, email: '', department: dept, city,
           address: `Calle ${between(1, 180)} # ${between(1, 90)}-${between(1, 90)}`,
           orders_count: 0, total_spent: 0, tags: 'demo', created_at: createdAt, last_order_at: createdAt,
         };
-        insert('customers', customer);
+        await insert('customers', customer);
       }
-      run('UPDATE customers SET orders_count = orders_count + 1, last_order_at = ? WHERE id = ?', [createdAt, customer.id]);
+      await run('UPDATE customers SET orders_count = orders_count + 1, last_order_at = ? WHERE id = ?', [createdAt, customer.id]);
       if (status === 'delivered') {
-        run('UPDATE customers SET total_spent = total_spent + ? WHERE id = ?', [offer.price, customer.id]);
+        await run('UPDATE customers SET total_spent = total_spent + ? WHERE id = ?', [offer.price, customer.id]);
       }
 
       const order = {
@@ -221,8 +218,8 @@ function seedVariantTraffic({ product, test, offers, pages }) {
         device, session_id: sid, is_demo: 1,
         created_at: createdAt, updated_at: createdAt,
       };
-      insert('orders', order);
-      insert('order_events', {
+      await insert('orders', order);
+      await insert('order_events', {
         id: id('oev'), order_id: order.id, type: 'created',
         message: 'Pedido recibido desde la landing', actor: 'landing', created_at: createdAt,
       });
@@ -232,29 +229,36 @@ function seedVariantTraffic({ product, test, offers, pages }) {
 }
 
 /** Borra todo lo marcado como demo. Se expone en Ajustes del panel. */
-export function purgeDemoData() {
-  const orderIds = all('SELECT id FROM orders WHERE is_demo = 1').map((r) => r.id);
-  for (const oid of orderIds) run('DELETE FROM order_events WHERE order_id = ?', [oid]);
-  run('DELETE FROM orders WHERE is_demo = 1');
-  run('DELETE FROM events WHERE is_demo = 1');
-  run('DELETE FROM ad_spend WHERE is_demo = 1');
-  run("DELETE FROM customers WHERE tags = 'demo'");
-  setSetting('demo_data', false);
+export async function purgeDemoData() {
+  const orderIds = (await all('SELECT id FROM orders WHERE is_demo = 1')).map((r) => r.id);
+  for (const oid of orderIds) await run('DELETE FROM order_events WHERE order_id = ?', [oid]);
+  await run('DELETE FROM orders WHERE is_demo = 1');
+  await run('DELETE FROM events WHERE is_demo = 1');
+  await run('DELETE FROM ad_spend WHERE is_demo = 1');
+  await run("DELETE FROM customers WHERE tags = 'demo'");
+  await setSetting('demo_data', false);
   return { ok: true, removed: orderIds.length };
 }
 
-export const hasDemoData = () => getSetting('demo_data', false) === true;
+export const hasDemoData = async () => (await getSetting('demo_data', false)) === true;
 
 /* ── Siembra inicial ──────────────────────────────────────────────────── */
 
-export function ensureSeed() {
-  if (one('SELECT id FROM users LIMIT 1')) return false;
+export async function ensureSeed() {
+  if (await one('SELECT id FROM users LIMIT 1')) return false;
   const now = nowISO();
 
-  run('INSERT INTO users (id,email,name,role,password_hash,created_at) VALUES (?,?,?,?,?,?)',
-    [id('usr'), 'admin@dropstudio.co', 'Mateo', 'owner', hashPassword('admin123'), now]);
+  // Credenciales del primer usuario. En producción ponlas como variables de
+  // entorno: dejar 'admin123' en un panel expuesto es regalar el acceso.
+  const adminEmail = (process.env.ADMIN_EMAIL || 'admin@dropstudio.co').toLowerCase();
+  const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
+  if (adminPass === 'admin123') {
+    console.warn('[seed] ⚠ Usando la contraseña por defecto. Define ADMIN_PASSWORD antes de exponer el panel.');
+  }
+  await run('INSERT INTO users (id,email,name,role,password_hash,created_at) VALUES (?,?,?,?,?,?)',
+    [id('usr'), adminEmail, 'Mateo', 'owner', hashPassword(adminPass), now]);
 
-  setSetting('store', {
+  await setSetting('store', {
     name: 'DropStudio',
     legal_name: 'DropStudio SAS',
     country: 'CO',
@@ -263,13 +267,13 @@ export function ensureSeed() {
     default_shipping: 0,
     timezone: 'America/Bogota',
   });
-  setSetting('couriers', [
+  await setSetting('couriers', [
     { name: 'Interrapidísimo', cost: 12000, active: true },
     { name: 'Servientrega', cost: 13500, active: true },
     { name: 'Envía', cost: 12500, active: true },
     { name: 'Coordinadora', cost: 14000, active: false },
   ]);
-  setSetting('pixels', { meta: '', tiktok: '', google: '' });
+  await setSetting('pixels', { meta: '', tiktok: '', google: '' });
 
   // ── Producto piloto ──
   const product = {
@@ -290,14 +294,14 @@ export function ensureSeed() {
     status: 'testing',
     created_at: now, updated_at: now,
   };
-  insert('products', product);
+  await insert('products', product);
 
   const offers = [
     { id: id('ofr'), product_id: product.id, name: 'Lleva 2, Paga 1 — $99.900 (recomendado)', qty: 2, price: 99900, compare_price: 200000, is_default: 1, sort: 0 },
     { id: id('ofr'), product_id: product.id, name: '4 frascos — $179.900 (ahorra más)', qty: 4, price: 179900, compare_price: 400000, is_default: 0, sort: 1 },
     { id: id('ofr'), product_id: product.id, name: '1 frasco — $99.900', qty: 1, price: 99900, compare_price: 100000, is_default: 0, sort: 2 },
   ];
-  offers.forEach((o) => insert('offers', o));
+  for (const o of offers) await insert('offers', o);
 
   // ── Testeo piloto ──
   const test = {
@@ -312,42 +316,37 @@ export function ensureSeed() {
     end_date: null, verdict: '', notes: '',
     created_at: now, updated_at: now,
   };
-  insert('tests', test);
+  await insert('tests', test);
 
   // ── Landings: una por variante, todas contra el mismo testeo ──
-  const pages = VARIANT_CODES.map((code) => {
+  const pages = [];
+  for (const code of VARIANT_CODES) {
     const v = VARIANTS[code];
-    const file = `${v.slug}.html`;
     const page = {
       id: id('pag'), slug: v.slug,
       title: `Plasma — ${v.name}`,
       product_id: product.id, test_id: test.id,
       variant: code, type: 'landing', status: 'published',
-      file,
+      html: renderPlasmaLanding(offers, code),
       notes: `Ángulo ${v.angle}. Hipótesis: ${v.hypothesis}`,
       created_at: now, updated_at: now, published_at: now,
     };
-    const target = join(PAGES_DIR, file);
-    if (!existsSync(target)) writeFileSync(target, renderPlasmaLanding(offers, code), 'utf8');
-    insert('pages', page);
-    return page;
-  });
+    await insert('pages', page);
+    pages.push(page);
+  }
 
   // ── Datos de demostración ──
-  if (process.env.DS_NO_DEMO !== '1') {
-    db.exec('BEGIN');
+  if (process.env.SEED_DEMO === '1') {
     try {
-      seedDemoData({ product, page: pages[0], test, offers });
-      seedVariantTraffic({ product, test, offers, pages });
-      db.exec('COMMIT');
-      setSetting('demo_data', true);
+      await seedDemoData({ product, page: pages[0], test, offers });
+      await seedVariantTraffic({ product, test, offers, pages });
+      await setSetting('demo_data', true);
     } catch (err) {
-      db.exec('ROLLBACK');
       console.error('[seed] no se pudieron generar los datos de demostración:', err.message);
     }
   }
 
-  console.log('[seed] Base inicializada · producto, testeo y landing listos.');
+  console.log('[seed] Base inicializada · producto, 4 variantes y testeo listos.');
   return true;
 }
 

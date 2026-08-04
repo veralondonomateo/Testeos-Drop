@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
-import { APP_DIR, ASSETS_DIR, PORT, HOST, ORDER_STATUS, TEST_STATUS, VERDICTS, DB_FILE } from './config.js';
-import { all, one, getSetting, setSetting } from './db.js';
+import { PUBLIC_DIR, PORT, HOST, ORDER_STATUS, TEST_STATUS, VERDICTS } from './config.js';
+import { one, getSetting, setSetting } from './db.js';
 import {
   Router, readBody, json, text, html, parseCookies, cookie, serveStatic,
   HttpError, notFound, escapeHtml,
@@ -14,9 +13,7 @@ import * as Pages from './api/pages.js';
 import * as Tests from './api/tests.js';
 import * as Analytics from './api/analytics.js';
 import * as Track from './api/track.js';
-import { ensureSeed, purgeDemoData, hasDemoData } from './seed.js';
-
-ensureSeed();
+import { purgeDemoData, hasDemoData } from './seed.js';
 
 const router = new Router();
 const auth = (ctx) => Auth.requireAuth(ctx);
@@ -24,12 +21,12 @@ const auth = (ctx) => Auth.requireAuth(ctx);
 /* ── Sesión ───────────────────────────────────────────────────────────── */
 
 router.post('/api/auth/login', async ({ body, res }) => {
-  const { user, token } = Auth.login(body.email, body.password);
+  const { user, token } = await Auth.login(body.email, body.password);
   json(res, { user }, 200, { 'set-cookie': cookie(Auth.COOKIE_NAME, token) });
 });
 
-router.post('/api/auth/logout', ({ ctx, res }) => {
-  Auth.logout(ctx.token);
+router.post('/api/auth/logout', async ({ ctx, res }) => {
+  await Auth.logout(ctx.token);
   json(res, { ok: true }, 200, { 'set-cookie': cookie(Auth.COOKIE_NAME, '', { clear: true }) });
 });
 
@@ -37,61 +34,65 @@ router.get('/api/auth/me', ({ ctx }) => ({ user: auth(ctx) }));
 
 /* ── Bootstrap: catálogos que la SPA necesita al arrancar ─────────────── */
 
-router.get('/api/bootstrap', ({ ctx }) => {
+router.get('/api/bootstrap', async ({ ctx }) => {
   auth(ctx);
+  const [store, couriers, pixels, demo, orders, products, pages, tests, pending] = await Promise.all([
+    getSetting('store', {}),
+    getSetting('couriers', []),
+    getSetting('pixels', {}),
+    hasDemoData(),
+    one('SELECT COUNT(*) n FROM orders'),
+    one('SELECT COUNT(*) n FROM products'),
+    one('SELECT COUNT(*) n FROM pages'),
+    one('SELECT COUNT(*) n FROM tests'),
+    one(`SELECT COUNT(*) n FROM orders WHERE status = 'pending'`),
+  ]);
   return {
     order_status: ORDER_STATUS,
     test_status: TEST_STATUS,
     verdicts: VERDICTS,
-    settings: {
-      store: getSetting('store', {}),
-      couriers: getSetting('couriers', []),
-      pixels: getSetting('pixels', {}),
-    },
-    demo_data: hasDemoData(),
+    settings: { store, couriers, pixels },
+    demo_data: demo,
     counts: {
-      orders: one('SELECT COUNT(*) n FROM orders').n,
-      products: one('SELECT COUNT(*) n FROM products').n,
-      pages: one('SELECT COUNT(*) n FROM pages').n,
-      tests: one('SELECT COUNT(*) n FROM tests').n,
-      pending: one(`SELECT COUNT(*) n FROM orders WHERE status = 'pending'`).n,
+      orders: orders.n, products: products.n, pages: pages.n,
+      tests: tests.n, pending: pending.n,
     },
   };
 });
 
 /* ── Productos ────────────────────────────────────────────────────────── */
 
-router.get('/api/products', ({ ctx, query }) => (auth(ctx), { products: Products.listProducts(query) }));
-router.get('/api/products/:id', ({ ctx, params }) => (auth(ctx), { product: Products.getProduct(params.id) }));
-router.post('/api/products', ({ ctx, body }) => (auth(ctx), { product: Products.createProduct(body) }));
-router.patch('/api/products/:id', ({ ctx, params, body }) => (auth(ctx), { product: Products.updateProduct(params.id, body) }));
-router.delete('/api/products/:id', ({ ctx, params }) => (auth(ctx), Products.deleteProduct(params.id)));
+router.get('/api/products', async ({ ctx, query }) => (auth(ctx), { products: await Products.listProducts(query) }));
+router.get('/api/products/:id', async ({ ctx, params }) => (auth(ctx), { product: await Products.getProduct(params.id) }));
+router.post('/api/products', async ({ ctx, body }) => (auth(ctx), { product: await Products.createProduct(body) }));
+router.patch('/api/products/:id', async ({ ctx, params, body }) => (auth(ctx), { product: await Products.updateProduct(params.id, body) }));
+router.delete('/api/products/:id', async ({ ctx, params }) => (auth(ctx), Products.deleteProduct(params.id)));
 
 /* ── Pedidos ──────────────────────────────────────────────────────────── */
 
-router.get('/api/orders', ({ ctx, query }) => (auth(ctx), Orders.listOrders(query)));
-router.get('/api/orders/:id', ({ ctx, params }) => (auth(ctx), { order: Orders.getOrder(params.id) }));
-router.post('/api/orders', ({ ctx, body }) => {
+router.get('/api/orders', async ({ ctx, query }) => (auth(ctx), Orders.listOrders(query)));
+router.get('/api/orders/:id', async ({ ctx, params }) => (auth(ctx), { order: await Orders.getOrder(params.id) }));
+router.post('/api/orders', async ({ ctx, body }) => {
   const u = auth(ctx);
-  return { order: Orders.createOrder(body, { source: 'panel', actor: u.name }) };
+  return { order: await Orders.createOrder(body, { source: 'panel', actor: u.name }) };
 });
-router.patch('/api/orders/:id', ({ ctx, params, body }) => {
+router.patch('/api/orders/:id', async ({ ctx, params, body }) => {
   const u = auth(ctx);
-  return { order: Orders.updateOrder(params.id, body, u.name) };
+  return { order: await Orders.updateOrder(params.id, body, u.name) };
 });
-router.post('/api/orders/:id/note', ({ ctx, params, body }) => {
+router.post('/api/orders/:id/note', async ({ ctx, params, body }) => {
   const u = auth(ctx);
-  return { order: Orders.addNote(params.id, body.message, u.name) };
+  return { order: await Orders.addNote(params.id, body.message, u.name) };
 });
-router.post('/api/orders/bulk-status', ({ ctx, body }) => {
+router.post('/api/orders/bulk-status', async ({ ctx, body }) => {
   const u = auth(ctx);
   return Orders.bulkStatus(body.ids, body.status, u.name);
 });
-router.delete('/api/orders/:id', ({ ctx, params }) => (auth(ctx), Orders.deleteOrder(params.id)));
+router.delete('/api/orders/:id', async ({ ctx, params }) => (auth(ctx), Orders.deleteOrder(params.id)));
 
-router.get('/api/orders-export.csv', ({ ctx, query, res }) => {
+router.get('/api/orders-export.csv', async ({ ctx, query, res }) => {
   auth(ctx);
-  const csv = Orders.ordersCSV(query);
+  const csv = await Orders.ordersCSV(query);
   res.writeHead(200, {
     'content-type': 'text/csv; charset=utf-8',
     'content-disposition': `attachment; filename="pedidos-${new Date().toISOString().slice(0, 10)}.csv"`,
@@ -101,38 +102,38 @@ router.get('/api/orders-export.csv', ({ ctx, query, res }) => {
 
 /* ── Clientes ─────────────────────────────────────────────────────────── */
 
-router.get('/api/customers', ({ ctx, query }) => (auth(ctx), { customers: Orders.listCustomers(query) }));
-router.get('/api/customers/:id', ({ ctx, params }) => (auth(ctx), { customer: Orders.getCustomer(params.id) }));
+router.get('/api/customers', async ({ ctx, query }) => (auth(ctx), { customers: await Orders.listCustomers(query) }));
+router.get('/api/customers/:id', async ({ ctx, params }) => (auth(ctx), { customer: await Orders.getCustomer(params.id) }));
 
 /* ── Páginas ──────────────────────────────────────────────────────────── */
 
-router.get('/api/pages', ({ ctx, query }) => (auth(ctx), { pages: Pages.listPages(query) }));
-router.get('/api/pages/:id', ({ ctx, params }) => (auth(ctx), { page: Pages.getPage(params.id) }));
-router.get('/api/pages/:id/html', ({ ctx, params }) => (auth(ctx), { html: Pages.getPageHTML(params.id) }));
-router.put('/api/pages/:id/html', ({ ctx, params, body }) => (auth(ctx), { page: Pages.savePageHTML(params.id, body.html) }));
-router.post('/api/pages', ({ ctx, body }) => (auth(ctx), { page: Pages.createPage(body) }));
-router.post('/api/pages/:id/duplicate', ({ ctx, params }) => (auth(ctx), { page: Pages.duplicatePage(params.id) }));
-router.patch('/api/pages/:id', ({ ctx, params, body }) => (auth(ctx), { page: Pages.updatePage(params.id, body) }));
-router.delete('/api/pages/:id', ({ ctx, params }) => (auth(ctx), Pages.deletePage(params.id)));
+router.get('/api/pages', async ({ ctx, query }) => (auth(ctx), { pages: await Pages.listPages(query) }));
+router.get('/api/pages/:id', async ({ ctx, params }) => (auth(ctx), { page: await Pages.getPage(params.id) }));
+router.get('/api/pages/:id/html', async ({ ctx, params }) => (auth(ctx), { html: await Pages.getPageHTML(params.id) }));
+router.put('/api/pages/:id/html', async ({ ctx, params, body }) => (auth(ctx), { page: await Pages.savePageHTML(params.id, body.html) }));
+router.post('/api/pages', async ({ ctx, body }) => (auth(ctx), { page: await Pages.createPage(body) }));
+router.post('/api/pages/:id/duplicate', async ({ ctx, params }) => (auth(ctx), { page: await Pages.duplicatePage(params.id) }));
+router.patch('/api/pages/:id', async ({ ctx, params, body }) => (auth(ctx), { page: await Pages.updatePage(params.id, body) }));
+router.delete('/api/pages/:id', async ({ ctx, params }) => (auth(ctx), Pages.deletePage(params.id)));
 
 /* ── Testeos ──────────────────────────────────────────────────────────── */
 
-router.get('/api/tests', ({ ctx, query }) => (auth(ctx), { tests: Tests.listTests(query) }));
-router.get('/api/tests/:id', ({ ctx, params }) => (auth(ctx), { test: Tests.getTest(params.id) }));
-router.post('/api/tests', ({ ctx, body }) => (auth(ctx), { test: Tests.createTest(body) }));
-router.patch('/api/tests/:id', ({ ctx, params, body }) => (auth(ctx), { test: Tests.updateTest(params.id, body) }));
-router.delete('/api/tests/:id', ({ ctx, params }) => (auth(ctx), Tests.deleteTest(params.id)));
-router.get('/api/tests/:id/variants', ({ ctx, params }) => (auth(ctx), { variants: Analytics.variantBreakdown(params.id) }));
+router.get('/api/tests', async ({ ctx, query }) => (auth(ctx), { tests: await Tests.listTests(query) }));
+router.get('/api/tests/:id', async ({ ctx, params }) => (auth(ctx), { test: await Tests.getTest(params.id) }));
+router.post('/api/tests', async ({ ctx, body }) => (auth(ctx), { test: await Tests.createTest(body) }));
+router.patch('/api/tests/:id', async ({ ctx, params, body }) => (auth(ctx), { test: await Tests.updateTest(params.id, body) }));
+router.delete('/api/tests/:id', async ({ ctx, params }) => (auth(ctx), Tests.deleteTest(params.id)));
+router.get('/api/tests/:id/variants', async ({ ctx, params }) => (auth(ctx), { variants: await Analytics.variantBreakdown(params.id) }));
 
 /* ── Inversión / finanzas ─────────────────────────────────────────────── */
 
-router.get('/api/spend', ({ ctx, query }) => (auth(ctx), { spend: Tests.listSpend(query) }));
-router.post('/api/spend', ({ ctx, body }) => (auth(ctx), { entry: Tests.addSpend(body) }));
-router.delete('/api/spend/:id', ({ ctx, params }) => (auth(ctx), Tests.deleteSpend(params.id)));
+router.get('/api/spend', async ({ ctx, query }) => (auth(ctx), { spend: await Tests.listSpend(query) }));
+router.post('/api/spend', async ({ ctx, body }) => (auth(ctx), { entry: await Tests.addSpend(body) }));
+router.delete('/api/spend/:id', async ({ ctx, params }) => (auth(ctx), Tests.deleteSpend(params.id)));
 
 /* ── Analítica ────────────────────────────────────────────────────────── */
 
-router.get('/api/analytics', ({ ctx, query }) => {
+router.get('/api/analytics', async ({ ctx, query }) => {
   auth(ctx);
   return Analytics.overview(query.range || '30d', {
     product_id: query.product_id || null,
@@ -142,27 +143,28 @@ router.get('/api/analytics', ({ ctx, query }) => {
 
 /* ── Ajustes ──────────────────────────────────────────────────────────── */
 
-router.get('/api/settings', ({ ctx }) => {
+router.get('/api/settings', async ({ ctx }) => {
   auth(ctx);
-  return {
-    store: getSetting('store', {}),
-    couriers: getSetting('couriers', []),
-    pixels: getSetting('pixels', {}),
-    users: Auth.listUsers(),
-  };
+  const [store, couriers, pixels, users] = await Promise.all([
+    getSetting('store', {}), getSetting('couriers', []), getSetting('pixels', {}), Auth.listUsers(),
+  ]);
+  return { store, couriers, pixels, users };
 });
 
-router.put('/api/settings', ({ ctx, body }) => {
+router.put('/api/settings', async ({ ctx, body }) => {
   auth(ctx);
   for (const key of ['store', 'couriers', 'pixels']) {
-    if (body[key] !== undefined) setSetting(key, body[key]);
+    if (body[key] !== undefined) await setSetting(key, body[key]);
   }
-  return { ok: true, store: getSetting('store', {}), couriers: getSetting('couriers', []), pixels: getSetting('pixels', {}) };
+  const [store, couriers, pixels] = await Promise.all([
+    getSetting('store', {}), getSetting('couriers', []), getSetting('pixels', {}),
+  ]);
+  return { ok: true, store, couriers, pixels };
 });
 
-router.post('/api/users', ({ ctx, body }) => (auth(ctx), { user: Auth.createUser(body) }));
+router.post('/api/users', async ({ ctx, body }) => (auth(ctx), { user: await Auth.createUser(body) }));
 
-router.post('/api/demo/purge', ({ ctx }) => (auth(ctx), purgeDemoData()));
+router.post('/api/demo/purge', async ({ ctx }) => (auth(ctx), purgeDemoData()));
 
 /* ── Tracking público (sin sesión) ────────────────────────────────────── */
 
@@ -171,23 +173,11 @@ router.post('/api/track/order', ({ body, req }) => Track.trackOrder(body, req));
 
 /* ── Landing pública + preview ────────────────────────────────────────── */
 
-router.get('/p/:slug', ({ params, query, res, ctx }) => {
+router.get('/p/:slug', async ({ params, query, res, ctx }) => {
   const preview = query.preview === '1' && !!ctx.user;
-  const page = Pages.renderPublicPage(params.slug, { preview });
-  if (!page) {
-    return html(res, notFoundPage(params.slug), 404);
-  }
+  const page = await Pages.renderPublicPage(params.slug, { preview });
+  if (!page) return html(res, notFoundPage(params.slug), 404);
   html(res, page);
-});
-
-router.get('/_ds/runtime.js', ({ res }) => {
-  if (!serveStatic(res, APP_DIR, 'runtime.js')) throw notFound();
-});
-
-// Imágenes de las landings: cacheables y fuera del HTML, para que la página
-// pese poco en datos móviles — que es donde vive este tráfico.
-router.get('/assets/:file', ({ params, res }) => {
-  if (!serveStatic(res, ASSETS_DIR, params.file, { immutable: true })) throw notFound();
 });
 
 function notFoundPage(slug) {
@@ -201,9 +191,12 @@ p{color:#6e6e76;line-height:1.6}code{background:#eee;padding:2px 6px;border-radi
 Publícala desde el módulo <b>Páginas</b> del panel.</p></div></body></html>`;
 }
 
-/* ── Servidor ─────────────────────────────────────────────────────────── */
+/* ── Handler ──────────────────────────────────────────────────────────────
+   Función HTTP pura, sin `listen()`. Vercel la consume desde `api/index.js`;
+   en local la envuelve el createServer del final del archivo.
+   ────────────────────────────────────────────────────────────────────── */
 
-const server = createServer(async (req, res) => {
+export async function handler(req, res) {
   // Una ruta malformada ("//", un %-escape roto) no puede tumbar el proceso:
   // los escáneres y bots mandan basura constantemente.
   let url;
@@ -218,7 +211,7 @@ const server = createServer(async (req, res) => {
   try {
     const cookies = parseCookies(req);
     const token = cookies[Auth.COOKIE_NAME];
-    const ctx = { token, user: Auth.userFromToken(token) };
+    const ctx = { token, user: await Auth.userFromToken(token) };
 
     const match = router.match(req.method, pathname);
     if (match) {
@@ -229,13 +222,14 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Archivos estáticos del panel
+    // En Vercel los estáticos los sirve el CDN antes de llegar aquí; esta rama
+    // es la que atiende el desarrollo local.
     if (req.method === 'GET') {
       const rel = pathname === '/' ? 'index.html' : pathname.slice(1);
-      if (serveStatic(res, APP_DIR, rel, { immutable: /\.(woff2|png|jpe?g|svg|webp)$/.test(rel) })) return;
-      // Fallback SPA: cualquier ruta desconocida sin extensión sirve el panel
+      const immutable = /\.(woff2|png|jpe?g|svg|webp)$/.test(rel);
+      if (serveStatic(res, PUBLIC_DIR, rel, { immutable })) return;
       if (!pathname.startsWith('/api/') && !/\.[a-z0-9]{2,5}$/i.test(pathname)) {
-        if (serveStatic(res, APP_DIR, 'index.html')) return;
+        if (serveStatic(res, PUBLIC_DIR, 'index.html')) return;
       }
     }
 
@@ -250,24 +244,30 @@ const server = createServer(async (req, res) => {
       text(res, err.message || 'Error interno', status);
     }
   }
-});
+}
 
-// Última red: preferimos un error registrado a un panel caído a mitad de un testeo
-process.on('uncaughtException', (err) => console.error('[uncaught]', err));
-process.on('unhandledRejection', (err) => console.error('[unhandled]', err));
+export default handler;
 
-server.listen(PORT, HOST, () => {
-  const base = `http://${HOST}:${PORT}`;
-  const landing = one(`SELECT slug FROM pages WHERE status = 'published' ORDER BY created_at LIMIT 1`);
-  console.log(`
+/* ── Servidor local ───────────────────────────────────────────────────── */
+
+// Sólo se levanta cuando el archivo se ejecuta directamente (`npm start`).
+// Bajo Vercel el módulo se importa y esta rama nunca corre.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  process.on('uncaughtException', (err) => console.error('[uncaught]', err));
+  process.on('unhandledRejection', (err) => console.error('[unhandled]', err));
+
+  createServer(handler).listen(PORT, HOST, async () => {
+    const base = `http://${HOST}:${PORT}`;
+    const landing = await one(`SELECT slug FROM pages WHERE status = 'published' ORDER BY created_at LIMIT 1`)
+      .catch(() => null);
+    console.log(`
   ╭──────────────────────────────────────────────────────────╮
   │  DropStudio · plataforma de testeo de productos          │
   ╰──────────────────────────────────────────────────────────╯
 
    Panel      ${base}
-   Landing    ${landing ? `${base}/p/${landing.slug}` : '— publica una página desde el panel —'}
-   Base       ${DB_FILE.replace(process.env.HOME || '', '~')}
-
-   Acceso     admin@dropstudio.co  ·  admin123
+   Landing    ${landing ? `${base}/p/${landing.slug}` : '— corre `npm run migrate` primero —'}
+   Base       Postgres (DATABASE_URL)
 `);
-});
+  });
+}

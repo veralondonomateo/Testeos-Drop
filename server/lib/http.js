@@ -1,5 +1,6 @@
 import { createReadStream, statSync } from 'node:fs';
 import { extname, join, normalize, sep } from 'node:path';
+import { IS_PROD } from '../config.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -125,7 +126,10 @@ export function parseCookies(req) {
 
 export function cookie(name, value, { days = 30, clear = false } = {}) {
   const maxAge = clear ? 0 : days * 86400;
-  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  // `Secure` sólo en producción: en local no hay HTTPS y el navegador
+  // descartaría la cookie, dejándote sin poder iniciar sesión.
+  const secure = IS_PROD ? '; Secure' : '';
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=${maxAge}`;
 }
 
 /** Sirve un archivo estático desde `root`, bloqueando path traversal. */
