@@ -972,6 +972,15 @@ export function renderPlasmaLanding(offers = [], variantCode = 'A') {
 
   const body = v.order.map((key) => (SECTIONS[key] ? SECTIONS[key](v) : '')).join('\n');
 
+  // La fuente y el frasco del hero se sirven desde este mismo dominio y se
+  // precargan. Antes la fuente venía de Google: eso costaba DNS + TLS a
+  // fonts.googleapis.com, esperar su CSS, y otra vez DNS + TLS a
+  // fonts.gstatic.com antes de poder pintar una letra — media docena de viajes
+  // en la ruta crítica, que en 4G son cientos de milisegundos de pantalla en
+  // blanco. El subconjunto latino pesa 20 KB y cubre todo el español.
+  //
+  // Este comentario va aquí y no dentro del HTML: la landing se sirve millones
+  // de veces y no tiene por qué cargar con la explicación.
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -980,14 +989,6 @@ export function renderPlasmaLanding(offers = [], variantCode = 'A') {
 <title>${v.title}</title>
 <meta name="description" content="${v.description}">
 <meta name="robots" content="noindex">
-<!--
-  La fuente y el frasco del hero se sirven desde este mismo dominio y se
-  precargan. Antes la fuente venía de Google: eso costaba DNS + TLS a
-  fonts.googleapis.com, esperar su CSS, y otra vez DNS + TLS a fonts.gstatic.com
-  antes de poder pintar texto — media docena de viajes en la ruta crítica, que
-  en 4G colombiana son varios cientos de milisegundos mirando una pantalla en
-  blanco. El subconjunto latino pesa 20 KB y cubre todo el español.
--->
 <link rel="preload" href="${A}/questrial-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="${A}/bottle.png" as="image" fetchpriority="high">
 <link rel="preconnect" href="https://connect.facebook.net">
