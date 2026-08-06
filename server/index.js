@@ -223,7 +223,20 @@ router.get('/p/:slug', async ({ params, query, res, ctx }) => {
   const preview = query.preview === '1' && !!ctx.user;
   const page = await Pages.renderPublicPage(params.slug, { preview });
   if (!page) return html(res, notFoundPage(params.slug), 404);
-  html(res, page);
+
+  // Una landing publicada es idéntica para todo el mundo — lo que cambia por
+  // visitante lo pone `runtime.js` en el navegador. Así que el CDN puede
+  // servirla sin invocar la función: se ahorra el arranque en frío entero.
+  //
+  // `max-age=0` mantiene al navegador pidiendo siempre, para que un cambio se
+  // vea al recargar; los 60 s son sólo para el CDN, y `stale-while-revalidate`
+  // evita que expirar el caché le cueste la espera a un visitante.
+  //
+  // El preview nunca: sirve borradores y es por usuario.
+  const cache = preview
+    ? { 'cache-control': 'no-store' }
+    : { 'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=600' };
+  html(res, page, 200, cache);
 });
 
 /**
