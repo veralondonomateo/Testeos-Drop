@@ -80,6 +80,7 @@ export async function savePageHTML(pid, htmlBody) {
   const { changes } = await run('UPDATE pages SET html = ?, updated_at = ? WHERE id = ?',
     [htmlBody, nowISO(), pid]);
   if (!changes) throw notFound('Página no encontrada');
+  forgetPages();
   return getPage(pid);
 }
 
@@ -132,12 +133,14 @@ export async function updatePage(pid, body) {
   if (body.status === 'published' && existing.status !== 'published') {
     await run('UPDATE pages SET published_at = ? WHERE id = ?', [nowISO(), pid]);
   }
+  forgetPages();
   return getPage(pid);
 }
 
 export async function deletePage(pid) {
   const { changes } = await run('DELETE FROM pages WHERE id = ?', [pid]);
   if (!changes) throw notFound('Página no encontrada');
+  forgetPages();
   return { ok: true };
 }
 
@@ -192,15 +195,61 @@ src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/></noscri
 <!-- End Meta Pixel -->`;
 }
 
+/* ── Caché en memoria ────────────────────────────────────────────────── */
+
+/**
+ * El HTML de una landing es idéntico para todos los visitantes: lo que cambia
+ * por persona —sesión, dispositivo, variante— lo pone `runtime.js` ya en el
+ * navegador. Así que se puede guardar ya montado.
+ *
+ * Sin esto cada visita costaba cuatro viajes a Supabase (página, producto,
+ * ofertas y ajustes) desde una función en otra región: de ahí salían ~700 ms de
+ * los 800 de TTFB. Vercel reutiliza el contenedor entre invocaciones, así que
+ * el caché sobrevive a la mayoría de las visitas.
+ *
+ * El TTL corto es una red de seguridad, no el mecanismo principal: al guardar o
+ * publicar desde el panel el caché se invalida a mano (`forgetPage`), y el
+ * minuto sólo cubre el caso de varios contenedores vivos a la vez.
+ */
+const CACHE_TTL = 60_000;
+const pageCache = () => (globalThis.__dsPageCache ||= new Map());
+
+function cached(key) {
+  const hit = pageCache().get(key);
+  if (hit && hit.until > Date.now()) return hit.value;
+  if (hit) pageCache().delete(key);
+  return null;
+}
+
+const remember = (key, value) => {
+  pageCache().set(key, { value, until: Date.now() + CACHE_TTL });
+  return value;
+};
+
+/** Se llama al editar, publicar o borrar: el cambio debe verse ya, no en 60s. */
+export const forgetPages = () => pageCache().clear();
+
 /**
  * Devuelve el HTML público de la landing con el runtime de tracking inyectado
  * justo antes de `</body>`.
  */
 export async function renderPublicPage(slug, { preview = false } = {}) {
-  const p = await one('SELECT * FROM pages WHERE slug = ?', [slug]);
-  if (!p) return null;
-  if (p.status !== 'published' && !preview) return null;
-  return renderPage(p, { preview });
+  // El preview nunca se cachea: lleva el píxel desactivado y sirve borradores,
+  // así que compartir su HTML con el tráfico real sería justo lo contrario.
+  if (preview) {
+    const p = await one('SELECT * FROM pages WHERE slug = ?', [slug]);
+    return p ? renderPage(p, { preview: true }) : null;
+  }
+
+  // Se cachea la fila, no el HTML: así el render pasa por `renderPage`, que
+  // tiene su propio caché y lo comparte con el enlace repartidor.
+  const key = `slug:${slug}`;
+  let p = cached(key);
+  if (p === null) {
+    p = await one('SELECT * FROM pages WHERE slug = ?', [slug]);
+    remember(key, p && p.status === 'published' ? p : false);
+  }
+  return p ? renderPage(p) : null;
 }
 
 /**
@@ -209,6 +258,15 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
  * consulta de más en cada visita.
  */
 export async function renderPage(p, { preview = false } = {}) {
+  if (!preview) {
+    const hit = cached(`page:${p.id}`);
+    if (hit) return hit;
+  }
+  const html = await buildPage(p, { preview });
+  return preview ? html : remember(`page:${p.id}`, html);
+}
+
+async function buildPage(p, { preview = false } = {}) {
   const product = p.product_id ? await one('SELECT * FROM products WHERE id = ?', [p.product_id]) : null;
   const offers = product
     ? await all('SELECT * FROM offers WHERE product_id = ? ORDER BY sort, price', [product.id])
@@ -270,14 +328,21 @@ export const splitCookie = (code) => `ds_ab_${String(code).toLowerCase().replace
  * Devuelve null si el testeo no existe o no tiene ninguna landing publicada.
  */
 export async function pickVariant(testCode, sticky = null) {
-  const test = await one('SELECT id, code, name FROM tests WHERE lower(code) = lower(?)', [testCode]);
-  if (!test) return null;
-
-  const pages = await all(
-    `SELECT * FROM pages WHERE test_id = ? AND status = 'published' ORDER BY variant`,
-    [test.id]
-  );
-  if (!pages.length) return null;
+  // El testeo y sus variantes publicadas cambian con muy poca frecuencia; el
+  // reparto, en cambio, corre en cada visita del anuncio. Se cachea la consulta
+  // y no la elección, que tiene que seguir siendo aleatoria por visitante.
+  const key = `split:${String(testCode).toLowerCase()}`;
+  let found = cached(key);
+  if (found === null) {
+    const test = await one('SELECT id, code, name FROM tests WHERE lower(code) = lower(?)', [testCode]);
+    const pages = test
+      ? await all(`SELECT * FROM pages WHERE test_id = ? AND status = 'published' ORDER BY variant`, [test.id])
+      : [];
+    found = pages.length ? { test, pages } : false;
+    remember(key, found);
+  }
+  if (!found) return null;
+  const { test, pages } = found;
 
   const held = sticky ? pages.find((p) => p.variant === sticky) : null;
   if (held) return { test, page: held, fresh: false };
