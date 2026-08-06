@@ -226,6 +226,28 @@ router.get('/p/:slug', async ({ params, query, res, ctx }) => {
   html(res, page);
 });
 
+/**
+ * Enlace repartidor: una sola URL que divide el tráfico entre las landings
+ * publicadas de un testeo. Es la que va en el anuncio.
+ *
+ * Sirve la landing en el mismo sitio en vez de redirigir, por tres razones:
+ * un 302 cuesta un viaje extra de red que en móvil se paga en rebote; los
+ * parámetros del anuncio (utm_*, fbclid) sobreviven solos al no reescribirse
+ * la URL; y Meta ve un único destino estable en vez de dos, que es lo que
+ * quiere para acumular señal de calidad.
+ */
+router.get('/t/:code', async ({ params, req, res }) => {
+  const key = Pages.splitCookie(params.code);
+  const pick = await Pages.pickVariant(params.code, parseCookies(req)[key] || null);
+  if (!pick) return html(res, splitNotFoundPage(params.code), 404);
+
+  const page = await Pages.renderPage(pick.page);
+  // La cookie sólo se escribe al asignar por primera vez: reescribirla en cada
+  // visita renovaría los 30 días y un visitante muy recurrente nunca saldría
+  // del testeo.
+  html(res, page, 200, pick.fresh ? { 'set-cookie': cookie(key, pick.page.variant, { days: 30 }) } : {});
+});
+
 function notFoundPage(slug) {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Página no disponible</title>
@@ -235,6 +257,17 @@ p{color:#6e6e76;line-height:1.6}code{background:#eee;padding:2px 6px;border-radi
 <body><div class="b"><h1>Esta página no está publicada</h1>
 <p>No encontramos una landing publicada en <code>/p/${escapeHtml(slug)}</code>.
 Publícala desde el módulo <b>Páginas</b> del panel.</p></div></body></html>`;
+}
+
+function splitNotFoundPage(code) {
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Testeo no disponible</title>
+<style>body{font-family:system-ui,sans-serif;background:#f5f5f4;color:#16161a;display:grid;place-items:center;
+min-height:100vh;margin:0;padding:32px;text-align:center}.b{max-width:420px}h1{font-size:22px;margin:0 0 10px}
+p{color:#6e6e76;line-height:1.6}code{background:#eee;padding:2px 6px;border-radius:5px}</style></head>
+<body><div class="b"><h1>Este enlace no reparte tráfico</h1>
+<p>No hay ningún testeo <code>${escapeHtml(code)}</code> con landings publicadas.
+Revisa el código en <b>Testeos</b> y publica al menos una variante desde <b>Páginas</b>.</p></div></body></html>`;
 }
 
 /* ── Handler ──────────────────────────────────────────────────────────────

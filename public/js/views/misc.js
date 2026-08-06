@@ -665,6 +665,9 @@ export async function abTestView({ host }) {
     /* Lectura del experimento en una frase */
     content.append(readout(rows, leader));
 
+    /* Enlace único para el anuncio */
+    content.append(splitLink(test, rows));
+
     /* Resumen */
     content.append(el('div', { class: 'stats c4' },
       statTile({ label: 'Variantes en prueba', value: num(rows.length), hint: test.name }),
@@ -808,6 +811,39 @@ function confidenceCell(r) {
   return el('div', {},
     el('span', { class: `badge ${tone}` }, el('span', { class: 'dot' }), pct(c, 0)),
     el('div', { class: 'cell-sub', text: c >= 95 ? 'diferencia real' : 'aún no concluyente' }));
+}
+
+/**
+ * Enlace único para pegar en el anuncio. El servidor reparte cada visita nueva
+ * entre las variantes publicadas y luego le fija esa misma a ese visitante.
+ */
+function splitLink(test, rows) {
+  const url = `${location.origin}/t/${test.code}`;
+
+  const input = el('input', { value: url, readonly: true, style: { flex: '1', minWidth: '0' } });
+  input.addEventListener('focus', () => input.select());
+
+  const copyBtn = el('button', { class: 'btn' }, icon('copy'), 'Copiar');
+  copyBtn.addEventListener('click', () => copyText(url));
+
+  const openBtn = el('a', {
+    class: 'btn ghost', href: `/t/${test.code}`, target: '_blank', rel: 'noopener',
+  }, icon('external'), 'Probar');
+
+  const letters = rows.map((r) => r.variant).join(' y ');
+
+  return card({
+    title: 'Enlace para el anuncio',
+    subtitle: `Reparte el tráfico por partes iguales entre ${letters}`,
+    body: el('div', { class: 'stack' },
+      el('div', { class: 'row', style: { gap: '8px' } }, input, copyBtn, openBtn),
+      el('p', {
+        class: 'muted small', style: { margin: '0' },
+        text: 'Pega esta URL en el anuncio en vez de la de una landing suelta. A cada visitante '
+          + 'le toca una variante al azar y se le queda fija 30 días, así que si vuelve no '
+          + 'contamina la comparación. Los parámetros que añade Meta (utm_*, fbclid) se conservan.',
+      })),
+  });
 }
 
 /** Traduce el estado del experimento a una recomendación en lenguaje llano. */

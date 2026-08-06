@@ -200,7 +200,15 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
   const p = await one('SELECT * FROM pages WHERE slug = ?', [slug]);
   if (!p) return null;
   if (p.status !== 'published' && !preview) return null;
+  return renderPage(p, { preview });
+}
 
+/**
+ * Igual que `renderPublicPage`, pero con la fila ya en mano: el reparto de
+ * tráfico ya resolvió qué landing toca y volver a buscarla por slug sería una
+ * consulta de más en cada visita.
+ */
+export async function renderPage(p, { preview = false } = {}) {
   const product = p.product_id ? await one('SELECT * FROM products WHERE id = ?', [p.product_id]) : null;
   const offers = product
     ? await all('SELECT * FROM offers WHERE product_id = ? ORDER BY sort, price', [product.id])
@@ -239,4 +247,44 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
   return source.includes('</body>')
     ? source.replace(/<\/body>/i, `${inject}</body>`)
     : source + inject;
+}
+
+/* ── Reparto de tráfico ──────────────────────────────────────────────── */
+
+/**
+ * Nombre de la cookie que fija la variante de un visitante.
+ * El código del testeo se normaliza ('T-001' → 'ds_ab_t001') porque los
+ * guiones son válidos en una cookie pero invitan a errores al leerla.
+ */
+export const splitCookie = (code) => `ds_ab_${String(code).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+
+/**
+ * Elige qué landing le toca a un visitante dentro de un testeo.
+ *
+ * `sticky` es la variante que el visitante ya traía asignada, y se respeta
+ * siempre que siga publicada. Esto no es un detalle: si alguien que hizo clic
+ * en el anuncio y vio la variante A volviera días después y cayera en la B, su
+ * pedido se le acreditaría a la variante equivocada y la comparación dejaría de
+ * medir lo que dice medir.
+ *
+ * Devuelve null si el testeo no existe o no tiene ninguna landing publicada.
+ */
+export async function pickVariant(testCode, sticky = null) {
+  const test = await one('SELECT id, code, name FROM tests WHERE lower(code) = lower(?)', [testCode]);
+  if (!test) return null;
+
+  const pages = await all(
+    `SELECT * FROM pages WHERE test_id = ? AND status = 'published' ORDER BY variant`,
+    [test.id]
+  );
+  if (!pages.length) return null;
+
+  const held = sticky ? pages.find((p) => p.variant === sticky) : null;
+  if (held) return { test, page: held, fresh: false };
+
+  // Uniforme entre las publicadas: con dos variantes es el 50/50 que se busca,
+  // y si se publica una tercera el reparto se reajusta solo. Despublicar una a
+  // mitad del testeo tampoco rompe el enlace — el tráfico pasa a las que queden
+  // en vez de caer en un 404.
+  return { test, page: pages[Math.floor(Math.random() * pages.length)], fresh: true };
 }
