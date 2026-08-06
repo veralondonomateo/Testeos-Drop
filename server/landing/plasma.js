@@ -614,7 +614,7 @@ const SECTIONS = {
         <div class="doc-verified">${check()}</div>
         <div>
           <div class="nm">Dr. Andrés Direr</div>
-          <div class="pr">Cardiólogo · Universidad de La Sabana<br>Reg. médico [PENDIENTE] · Colombia</div>
+          <div class="pr">Cardiólogo · Universidad de La Sabana · Colombia</div>
         </div>
       </div>
     </div>
