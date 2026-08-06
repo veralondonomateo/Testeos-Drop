@@ -504,6 +504,12 @@ export async function settingsView({ host }) {
   /* Píxeles */
   const pixelForm = el('form', { class: 'form-grid' },
     field({ label: 'Meta Pixel ID', name: 'meta', value: pixels.meta || '', placeholder: '1234567890' }),
+    field({
+      label: 'Meta · Token de la API de Conversiones', name: 'meta_capi_token',
+      value: pixels.meta_capi_token || '', placeholder: 'EAAG…',
+      help: 'Con esto el servidor reporta la compra cuando marcas el pedido como Entregado. '
+        + 'Sin token, la compra no se le reporta a Meta.',
+    }),
     field({ label: 'TikTok Pixel ID', name: 'tiktok', value: pixels.tiktok || '', placeholder: 'C1AB…' }),
     field({ label: 'Google Ads / GA4 ID', name: 'google', value: pixels.google || '', placeholder: 'G-XXXXXXX' }));
   const pixelBtn = el('button', { class: 'btn', type: 'button' }, icon('save'), 'Guardar');

@@ -227,10 +227,15 @@
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
-        // Purchase se dispara con el pedido confirmado. En contra entrega eso
-        // significa "pedido tomado", no "cobrado": Meta optimizará a pedidos,
-        // y tu tasa de entrega decide cuántos se vuelven dinero.
-        meta('Purchase', {
+        // Aquí el pedido está tomado, no pagado: en contra entrega el cliente
+        // todavía no ha soltado un peso y una parte de estos pedidos terminará
+        // devuelta o cancelada. Por eso esto es un Lead.
+        //
+        // El Purchase lo manda el servidor por la API de Conversiones cuando el
+        // pedido queda 'delivered', que es cuando entró la plata de verdad.
+        // `eventID` va con el código del pedido para que los dos eventos sean
+        // rastreables al mismo pedido desde Ads Manager.
+        meta('Lead', {
           content_ids: [CTX.productId || ''],
           content_type: 'product',
           content_name: offer ? offer.name : '',

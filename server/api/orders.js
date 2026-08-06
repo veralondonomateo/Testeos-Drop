@@ -2,6 +2,7 @@ import { all, one, run, insert, update } from '../db.js';
 import { ORDER_STATUS } from '../config.js';
 import { id, nowISO, orderCode, clean, toInt } from '../lib/util.js';
 import { HttpError, notFound } from '../lib/http.js';
+import { sendPurchase } from './meta.js';
 
 const EDITABLE = ['customer_name', 'phone', 'email', 'department', 'city', 'address', 'notes',
   'qty', 'subtotal', 'shipping', 'total', 'cost_total', 'status', 'courier', 'tracking', 'offer_name'];
@@ -57,6 +58,25 @@ export async function getOrder(oid) {
 
 const logEvent = (orderId, type, message, actor = 'sistema') =>
   insert('order_events', { id: id('oev'), order_id: orderId, type, message, actor, created_at: nowISO() });
+
+/**
+ * Reporta a Meta el pedido que acaba de quedar entregado — la única compra de
+ * verdad en un contra entrega, porque es cuando entró la plata.
+ *
+ * Se registra en la bitácora del pedido, incluso cuando falla: si mañana el
+ * ROAS de Ads Manager no cuadra con el del panel, la respuesta está aquí y no
+ * en un log que ya se perdió.
+ */
+async function reportPurchase(order, oid) {
+  const r = await sendPurchase(order);
+  if (r.ok) {
+    await logEvent(oid, 'meta', `Compra reportada a Meta · ${order.code}`, 'sistema');
+  } else if (r.skipped) {
+    await logEvent(oid, 'meta', `Compra no reportada a Meta: ${r.skipped}`, 'sistema');
+  } else {
+    await logEvent(oid, 'meta', `Falló el reporte a Meta: ${r.error}`, 'sistema');
+  }
+}
 
 /**
  * Crea un pedido. Se usa tanto desde el panel (manual) como desde la landing pública.
@@ -139,7 +159,10 @@ export async function updateOrder(oid, body, actor = 'sistema') {
   if (patch.status && patch.status !== existing.status) {
     await logEvent(oid, 'status',
       `${ORDER_STATUS[existing.status].label} → ${ORDER_STATUS[patch.status].label}`, actor);
-    if (patch.status === 'delivered') await recomputeCustomer(existing.customer_id);
+    if (patch.status === 'delivered') {
+      await recomputeCustomer(existing.customer_id);
+      await reportPurchase({ ...existing, ...patch }, oid);
+    }
   }
   if (patch.notes != null && patch.notes !== existing.notes) await logEvent(oid, 'note', 'Nota actualizada', actor);
   return getOrder(oid);
