@@ -113,17 +113,31 @@
     var el = e.target.closest ? e.target.closest('a[href="#pedir"], [data-ds-cta]') : null;
     if (!el) return;
     track('cta_click');
+
+    var o = (CTX.offers || [])[0];
+    var carrito = {
+      content_ids: [CTX.productId || ''],
+      content_type: 'product',
+      num_items: o ? o.qty : 1,
+      value: o ? o.price : (CTX.product ? CTX.product.price : 0),
+      currency: 'COP'
+    };
+
+    // Esta página no tiene carrito: el CTA lleva directo al formulario. Aun así
+    // se manda AddToCart, porque es el peldaño que Ads Manager espera entre ver
+    // el producto y empezar el checkout. Sin él esa columna sale en cero y el
+    // embudo parece roto cuando no lo está.
+    // Sin `once()` a propósito: ese helper además registra el evento en la base,
+    // y aquí ya lo cuenta `cta_click`. Duplicarlo inflaría el embudo del panel.
+    if (!sent.add_to_cart) {
+      sent.add_to_cart = true;
+      meta('AddToCart', carrito);
+    }
+
     setTimeout(function () {
       if (sent.checkout_open) return;
       once('checkout_open');
-      var o = (CTX.offers || [])[0];
-      meta('InitiateCheckout', {
-        content_ids: [CTX.productId || ''],
-        content_type: 'product',
-        num_items: o ? o.qty : 1,
-        value: o ? o.price : (CTX.product ? CTX.product.price : 0),
-        currency: 'COP'
-      });
+      meta('InitiateCheckout', carrito);
     }, 60);
   }, true);
 
