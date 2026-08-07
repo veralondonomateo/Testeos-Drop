@@ -3,22 +3,22 @@ import { getSetting } from '../db.js';
 import { CURRENCY } from '../config.js';
 
 /**
- * API de Conversiones de Meta — el Purchase de verdad.
+ * API de Conversiones de Meta — respaldo del Purchase del navegador.
  *
- * El píxel del navegador no puede marcar compras en contra entrega: cuando el
- * cliente envía el formulario todavía no ha pagado nada, y en Colombia una
- * parte de esos pedidos termina devuelta o cancelada. Si Purchase se disparara
- * ahí, Meta optimizaría hacia gente que *pide* y no hacia gente que *paga*, y
- * el ROAS del panel no cuadraría nunca con el de Ads Manager.
+ * Los dos salen en el mismo momento, al tomarse el pedido, y llevan el código
+ * del pedido como `event_id`: Meta los reconoce como el mismo hecho y cuenta
+ * una sola compra.
  *
- * Por eso el reparto es:
+ * No es redundancia inútil. Entre bloqueadores de anuncios, Safari e iOS se
+ * pierde una parte de los eventos del navegador; este sale del servidor, donde
+ * nada lo bloquea, y además viaja con los datos del comprador hasheados, que
+ * mejoran el emparejamiento.
  *
- *   navegador  →  Lead      cuando se toma el pedido
- *   servidor   →  Purchase  cuando el pedido queda en 'delivered'
- *
- * El Purchase sale desde aquí, no desde el navegador, porque el momento en que
- * se confirma la entrega ocurre días después y con el cliente sin la página
- * abierta.
+ * Nota sobre el contra entrega: aquí "compra" significa pedido tomado, no
+ * cobrado. Meta va a optimizar hacia gente que pide, y tu tasa de entrega
+ * decide cuántos de esos se vuelven plata. El ROAS de Ads Manager va a salir
+ * más alto que el real del panel, y esa diferencia es exactamente el porcentaje
+ * que no se entrega.
  */
 
 const API_VERSION = 'v21.0';
@@ -59,11 +59,11 @@ function userData(order) {
 }
 
 /**
- * Reporta un pedido entregado como Purchase.
+ * Reporta el pedido como Purchase.
  *
- * Nunca lanza: un fallo de red hacia Meta no puede impedir que un pedido se
- * marque como entregado en el panel. Devuelve `{ ok, skipped?, error? }` para
- * que quien llame pueda registrarlo.
+ * Nunca lanza: un fallo de red hacia Meta no puede tumbar el registro de un
+ * pedido ni dejar al cliente sin su confirmación. Devuelve
+ * `{ ok, skipped?, error? }` para que quien llame lo deje escrito.
  */
 export async function sendPurchase(order, { sourceUrl = '' } = {}) {
   const pixels = await getSetting('pixels', {});
@@ -75,9 +75,8 @@ export async function sendPurchase(order, { sourceUrl = '' } = {}) {
     data: [{
       event_name: 'Purchase',
       event_time: Math.floor(Date.now() / 1000),
-      // El código del pedido es estable y único: si un pedido se marcara
-      // entregado dos veces, Meta descarta el duplicado en vez de contar dos
-      // compras.
+      // El mismo identificador que usa el píxel del navegador. Es lo único que
+      // impide que cada venta se cuente dos veces.
       event_id: order.code,
       action_source: 'website',
       ...(sourceUrl ? { event_source_url: sourceUrl } : {}),
@@ -101,7 +100,7 @@ export async function sendPurchase(order, { sourceUrl = '' } = {}) {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(2500),
       }
     );
     const data = await res.json().catch(() => ({}));

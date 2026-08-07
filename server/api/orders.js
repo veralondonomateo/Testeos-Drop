@@ -60,22 +60,25 @@ const logEvent = (orderId, type, message, actor = 'sistema') =>
   insert('order_events', { id: id('oev'), order_id: orderId, type, message, actor, created_at: nowISO() });
 
 /**
- * Reporta a Meta el pedido que acaba de quedar entregado — la única compra de
- * verdad en un contra entrega, porque es cuando entró la plata.
+ * Reporta la compra a Meta por la API de Conversiones, en el momento en que se
+ * toma el pedido.
  *
- * Se registra en la bitácora del pedido, incluso cuando falla: si mañana el
- * ROAS de Ads Manager no cuadra con el del panel, la respuesta está aquí y no
- * en un log que ya se perdió.
+ * No sustituye al píxel del navegador: lo respalda. Entre bloqueadores de
+ * anuncios, Safari e iOS se pierde una parte de los eventos del navegador, y
+ * este va desde el servidor, donde nada lo bloquea. Los dos llevan el código
+ * del pedido como identificador, así que Meta reconoce que son el mismo hecho y
+ * cuenta una sola compra.
+ *
+ * Queda en la bitácora del pedido, también cuando falla: si el ROAS de Ads
+ * Manager no cuadra con el del panel, la respuesta está ahí.
  */
-async function reportPurchase(order, oid) {
+export async function reportPurchase(order) {
   const r = await sendPurchase(order);
-  if (r.ok) {
-    await logEvent(oid, 'meta', `Compra reportada a Meta · ${order.code}`, 'sistema');
-  } else if (r.skipped) {
-    await logEvent(oid, 'meta', `Compra no reportada a Meta: ${r.skipped}`, 'sistema');
-  } else {
-    await logEvent(oid, 'meta', `Falló el reporte a Meta: ${r.error}`, 'sistema');
-  }
+  const msg = r.ok ? `Compra reportada a Meta · ${order.code}`
+    : r.skipped ? `Compra no reportada a Meta: ${r.skipped}`
+    : `Falló el reporte a Meta: ${r.error}`;
+  await logEvent(order.id, 'meta', msg, 'sistema');
+  return r;
 }
 
 /**
@@ -159,10 +162,7 @@ export async function updateOrder(oid, body, actor = 'sistema') {
   if (patch.status && patch.status !== existing.status) {
     await logEvent(oid, 'status',
       `${ORDER_STATUS[existing.status].label} → ${ORDER_STATUS[patch.status].label}`, actor);
-    if (patch.status === 'delivered') {
-      await recomputeCustomer(existing.customer_id);
-      await reportPurchase({ ...existing, ...patch }, oid);
-    }
+    if (patch.status === 'delivered') await recomputeCustomer(existing.customer_id);
   }
   if (patch.notes != null && patch.notes !== existing.notes) await logEvent(oid, 'note', 'Nota actualizada', actor);
   return getOrder(oid);

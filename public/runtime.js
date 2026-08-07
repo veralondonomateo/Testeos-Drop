@@ -57,10 +57,10 @@
     return name + '_' + SID + '_' + Date.now().toString(36);
   }
 
-  function meta(event, params) {
+  function meta(event, params, id) {
     if (CTX.preview || !CTX.meta_pixel || typeof window.fbq !== 'function') return;
     try {
-      window.fbq('track', event, params || {}, { eventID: eventId(event) });
+      window.fbq('track', event, params || {}, { eventID: id || eventId(event) });
     } catch (e) { /* que un fallo del píxel nunca rompa el checkout */ }
   }
 
@@ -241,15 +241,14 @@
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
-        // Aquí el pedido está tomado, no pagado: en contra entrega el cliente
-        // todavía no ha soltado un peso y una parte de estos pedidos terminará
-        // devuelta o cancelada. Por eso esto es un Lead.
+        // Purchase al tomar el pedido. En contra entrega el cliente todavía no
+        // ha pagado, pero Meta necesita la señal ya: esperar a la entrega la
+        // retrasa días y deja al algoritmo sin nada con que aprender.
         //
-        // El Purchase lo manda el servidor por la API de Conversiones cuando el
-        // pedido queda 'delivered', que es cuando entró la plata de verdad.
-        // `eventID` va con el código del pedido para que los dos eventos sean
-        // rastreables al mismo pedido desde Ads Manager.
-        meta('Lead', {
+        // El `eventID` es el código del pedido, el mismo que usa el servidor al
+        // mandar este evento por la API de Conversiones. Así Meta reconoce que
+        // son el mismo hecho y cuenta una sola compra, no dos.
+        meta('Purchase', {
           content_ids: [CTX.productId || ''],
           content_type: 'product',
           content_name: offer ? offer.name : '',
@@ -257,7 +256,7 @@
           value: res.data.total || (offer ? offer.price : 0),
           currency: 'COP',
           order_id: res.data.code || ''
-        });
+        }, res.data.code || undefined);
         showSuccess(res.data, offer);
       })
       .catch(function (err) {

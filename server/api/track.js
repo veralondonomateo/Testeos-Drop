@@ -1,6 +1,6 @@
 import { insert, one } from '../db.js';
 import { id, nowISO, clean, toInt, detectDevice } from '../lib/util.js';
-import { createOrder } from './orders.js';
+import { createOrder, reportPurchase } from './orders.js';
 
 const ALLOWED = new Set(['pageview', 'scroll_50', 'scroll_90', 'cta_click', 'checkout_open', 'checkout_abandon', 'order']);
 
@@ -36,5 +36,12 @@ export async function trackOrder(body, req) {
   }, { source: 'landing', actor: 'landing' });
 
   await trackEvent({ ...body, type: 'order', value: order.total }, req);
+
+  // El respaldo por servidor del Purchase del navegador. Se espera porque en
+  // serverless el trabajo lanzado después de responder puede congelarse a mitad;
+  // `sendPurchase` nunca lanza y corta a los 2,5 s, así que un Meta lento no
+  // deja al cliente mirando el botón de confirmar.
+  await reportPurchase(order);
+
   return { ok: true, code: order.code, id: order.id, total: order.total };
 }
