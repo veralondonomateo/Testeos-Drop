@@ -65,7 +65,7 @@ function userData(order) {
  * pedido ni dejar al cliente sin su confirmación. Devuelve
  * `{ ok, skipped?, error? }` para que quien llame lo deje escrito.
  */
-export async function sendPurchase(order, { sourceUrl = '' } = {}) {
+export async function sendPurchase(order, { sourceUrl = '', eventTime = null } = {}) {
   const pixels = await getSetting('pixels', {});
   const pixelId = (pixels.meta || '').trim();
   const token = (pixels.meta_capi_token || '').trim();
@@ -74,7 +74,10 @@ export async function sendPurchase(order, { sourceUrl = '' } = {}) {
   const body = {
     data: [{
       event_name: 'Purchase',
-      event_time: Math.floor(Date.now() / 1000),
+      // `eventTime` sólo se usa al recuperar pedidos viejos: Meta acepta hasta
+      // 7 días atrás, y mandarlos con su hora real conserva la atribución al
+      // clic que los originó. En el camino normal se deja la de ahora.
+      event_time: eventTime ?? Math.floor(Date.now() / 1000),
       // El mismo identificador que usa el píxel del navegador. Es lo único que
       // impide que cada venta se cuente dos veces.
       event_id: order.code,
