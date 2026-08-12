@@ -494,8 +494,8 @@ const oferta = (list) => {
   </div>
 
   <ul class="stack">
-    <li><div class="d">Suplemento Capilar · 30 días<small>Saw Palmetto, Zinc, Vitamina D3, Biotina y Colágeno</small></div><b>${money(99900)}</b></li>
-    <li><div class="d">Roll-On Dermoestimulante<small>Minoxidil 2%, la concentración estudiada para mujeres</small></div><b>${money(100100)}</b></li>
+    <li><div class="d">Suplemento Capilar · 30 días<small>Saw Palmetto, Zinc, Vitamina D3, Biotina y Colágeno</small></div><b>${money(120000)}</b></li>
+    <li><div class="d">Roll-On Dermoestimulante<small>Minoxidil 2%, la concentración estudiada para mujeres</small></div><b>${money(80000)}</b></li>
     <li><div class="d">Ebook <i>El Método Anticaída</i><small>El protocolo explicado paso a paso</small></div><b class="free">Gratis</b></li>
     <li><div class="d">Envío a toda Colombia<small>2 a 4 días hábiles con seguimiento</small></div><b class="free">Gratis</b></li>
   </ul>
