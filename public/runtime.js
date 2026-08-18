@@ -275,6 +275,10 @@
         utm_medium: UTM.utm_medium,
         utm_campaign: UTM.utm_campaign,
         utm_content: UTM.utm_content,
+        // Las mismas señales que van en cada evento. Sin ellas la compra llega
+        // a Meta pero sin poder atribuirla al clic que la originó, que es lo
+        // que hace que un pedido no aparezca en la campaña que lo trajo.
+        fbp: fbIds().fbp, fbc: fbIds().fbc, source_url: location.href,
       }),
     })
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
