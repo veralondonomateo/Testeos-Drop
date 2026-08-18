@@ -186,11 +186,13 @@
   if (!form) return;
 
   var submitBtn = form.querySelector('[data-ds-submit]') || form.querySelector('button');
-  var offerSel = form.querySelector('[data-ds-offer]');
   var offers = CTX.offers || [];
   var busy = false;
 
   function currentOffer() {
+    // Se relee en cada envío: si el formulario se restauró, la referencia que
+    // se capturó al cargar podría apuntar a un nodo que ya no está en la página.
+    var offerSel = form.querySelector('[data-ds-offer]');
     if (!offerSel) return offers[0] || null;
     var byId = offers.filter(function (o) { return o.id === offerSel.value; })[0];
     if (byId) return byId;
@@ -326,10 +328,54 @@
     box.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
+  /**
+   * Confirmación del pedido.
+   *
+   * No se reemplaza el contenido del formulario: se esconden sus hijos y se
+   * añade el panel al lado. Machacar el innerHTML dejaba colgando las
+   * referencias que ya habían capturado el <select> de ofertas y el botón —el
+   * script de la landing incluido—, y sobre todo dejaba el mensaje pegado: al
+   * cerrar el modal y volver a tocar "pedir", la persona veía "¡Pedido
+   * confirmado!" en vez del formulario y creía que ya había comprado.
+   */
+  var hijosOcultos = [];
+
+  function ocultarFormulario() {
+    hijosOcultos = [];
+    for (var i = 0; i < form.children.length; i++) {
+      var n = form.children[i];
+      if (n.hasAttribute('data-ds-done')) continue;
+      hijosOcultos.push([n, n.style.display]);
+      n.style.display = 'none';
+    }
+  }
+
+  /** Devuelve el formulario a su estado original para poder pedir otra vez. */
+  function restaurarFormulario() {
+    var panel = form.querySelector('[data-ds-done]');
+    if (panel) panel.remove();
+    for (var i = 0; i < hijosOcultos.length; i++) hijosOcultos[i][0].style.display = hijosOcultos[i][1];
+    hijosOcultos = [];
+    busy = false;
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = ''; }
+    form.removeAttribute('data-ds-hecho');
+  }
+
+  // La landing avisa cada vez que el modal se abre o se cierra. Si se vuelve a
+  // abrir con un pedido ya enviado, se devuelve el formulario limpio.
+  window.addEventListener('dsmodal', function () {
+    var m = document.getElementById('dsModal');
+    if (m && m.classList.contains('open') && form.getAttribute('data-ds-hecho')) restaurarFormulario();
+  });
+
   function showSuccess(data, offer) {
     var price = offer ? offer.price : 0;
     var money = '$' + String(price).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    form.innerHTML = ''
+    ocultarFormulario();
+    form.setAttribute('data-ds-hecho', '1');
+    var panel = document.createElement('div');
+    panel.setAttribute('data-ds-done', '');
+    panel.innerHTML = ''
       + '<div style="text-align:center;padding:8px 0 4px">'
       + '  <div style="width:64px;height:64px;border-radius:50%;background:#eaf5ee;display:flex;'
       + '       align-items:center;justify-content:center;margin:0 auto 18px">'
@@ -345,6 +391,7 @@
       + '    <div style="font-size:20px;font-weight:700;letter-spacing:.05em;margin-top:4px">' + (data.code || '—') + '</div>'
       + '  </div>'
       + '</div>';
+    form.appendChild(panel);
     // El evento `order` lo registra el backend al crear el pedido — no se duplica aquí.
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
