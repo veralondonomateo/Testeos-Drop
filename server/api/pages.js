@@ -181,14 +181,25 @@ t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '${pixelId}');
-fbq('track', 'PageView');
+// La misma sesión que usa runtime.js, con el mismo algoritmo: los event_id del
+// navegador y los del servidor tienen que coincidir para que Meta deduplique.
+// Se calcula aquí porque el píxel dispara antes de que cargue el runtime.
+var dsSid;
+try {
+  dsSid = sessionStorage.getItem('ds_session_id');
+  if (!dsSid) {
+    dsSid = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    sessionStorage.setItem('ds_session_id', dsSid);
+  }
+} catch (e) { dsSid = 's' + Date.now().toString(36); }
+fbq('track', 'PageView', {}, { eventID: 'PageView_' + dsSid });
 fbq('track', 'ViewContent', {
   content_ids: ['${contentId}'],
   content_name: '${contentName}',
   content_type: 'product',
   value: ${value},
   currency: 'COP'
-});
+}, { eventID: 'ViewContent_' + dsSid });
 </script>
 <noscript><img height="1" width="1" style="display:none"
 src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/></noscript>

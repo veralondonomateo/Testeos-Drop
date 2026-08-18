@@ -59,13 +59,80 @@ function userData(order) {
 }
 
 /**
+ * Envía un evento cualquiera por la API de Conversiones.
+ *
+ * Existe porque el píxel del navegador sólo llega a una parte de la gente: entre
+ * iOS, Safari, Brave y los bloqueadores se pierde la mitad larga de los eventos,
+ * y con la mitad de las visitas Meta no tiene con qué optimizar. El mismo evento
+ * sale por los dos caminos con idéntico `event_id`, así que Meta los une y
+ * cuenta uno.
+ *
+ * `fbp` y `fbc` son lo que de verdad decide el emparejamiento: `fbc` guarda el
+ * clic en el anuncio. Sin ellos el evento llega pero queda sin atribuir.
+ *
+ * Nunca lanza: un fallo hacia Meta no puede afectar a la visita ni al pedido.
+ */
+export async function sendEvent({
+  eventName, eventId, sourceUrl = '', value = 0, contentIds = [],
+  fbp = '', fbc = '', clientIp = '', userAgent = '', user = null, eventTime = null,
+}) {
+  if (!eventName) return { ok: false, skipped: 'sin evento' };
+
+  const pixels = await getSetting('pixels', {});
+  const pixelId = (pixels.meta || '').trim();
+  const token = (pixels.meta_capi_token || '').trim();
+  if (!pixelId || !token) return { ok: false, skipped: 'sin token de la API de Conversiones' };
+
+  const user_data = user ? userData(user) : {};
+  if (fbp) user_data.fbp = fbp;
+  if (fbc) user_data.fbc = fbc;
+  if (clientIp) user_data.client_ip_address = clientIp;
+  if (userAgent) user_data.client_user_agent = userAgent;
+  // Sin ninguna señal de identidad Meta rechaza el evento; no vale la pena el viaje.
+  if (!Object.keys(user_data).length) return { ok: false, skipped: 'sin datos de emparejamiento' };
+
+  const custom_data = { currency: CURRENCY };
+  if (value) custom_data.value = Number(value) || 0;
+  if (contentIds.length) { custom_data.content_type = 'product'; custom_data.content_ids = contentIds; }
+
+  const body = {
+    data: [{
+      event_name: eventName,
+      event_time: eventTime ?? Math.floor(Date.now() / 1000),
+      ...(eventId ? { event_id: eventId } : {}),
+      action_source: 'website',
+      ...(sourceUrl ? { event_source_url: sourceUrl } : {}),
+      user_data,
+      custom_data,
+    }],
+  };
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${API_VERSION}/${pixelId}/events?access_token=${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(2500),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error?.message || `HTTP ${res.status}` };
+    return { ok: true, received: data.events_received ?? 1 };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Reporta el pedido como Purchase.
  *
  * Nunca lanza: un fallo de red hacia Meta no puede tumbar el registro de un
  * pedido ni dejar al cliente sin su confirmación. Devuelve
  * `{ ok, skipped?, error? }` para que quien llame lo deje escrito.
  */
-export async function sendPurchase(order, { sourceUrl = '', eventTime = null } = {}) {
+export async function sendPurchase(order, { sourceUrl = '', eventTime = null, fbp = '', fbc = '', clientIp = '', userAgent = '' } = {}) {
   const pixels = await getSetting('pixels', {});
   const pixelId = (pixels.meta || '').trim();
   const token = (pixels.meta_capi_token || '').trim();
@@ -83,7 +150,16 @@ export async function sendPurchase(order, { sourceUrl = '', eventTime = null } =
       event_id: order.code,
       action_source: 'website',
       ...(sourceUrl ? { event_source_url: sourceUrl } : {}),
-      user_data: userData(order),
+      // Al hash del comprador se le suman las señales del navegador: son las
+      // que permiten atribuir la venta al clic que la originó.
+      user_data: (() => {
+        const u = userData(order);
+        if (fbp) u.fbp = fbp;
+        if (fbc) u.fbc = fbc;
+        if (clientIp) u.client_ip_address = clientIp;
+        if (userAgent) u.client_user_agent = userAgent;
+        return u;
+      })(),
       custom_data: {
         currency: CURRENCY,
         value: Number(order.total) || 0,

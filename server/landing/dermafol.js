@@ -80,25 +80,35 @@ const INGREDIENTES = [
   ['Minoxidil 2%', 'Prolonga la fase de crecimiento y reactiva folículos en reposo. La concentración aprobada y estudiada para mujeres.'],
 ];
 
+/**
+ * Testimonios: sólo los reales de Judge.me en dermafol.co (6, promedio 4,67).
+ *
+ * Antes había cuatro inventados —Claudia R., Patricia M., Lorena T., Sara R.—
+ * con cifras de eficacia que nadie midió ("−68% caída", "+43% densidad"), y el
+ * encabezado anunciaba "4.9 ★ · +500 opiniones". Eso es publicidad engañosa: el
+ * Estatuto del Consumidor (Ley 1480 de 2011, art. 30) exige que un testimonio
+ * corresponda a un cliente real y verificable, y Meta rechaza los antes/después
+ * y las cifras de resultado sin sustento en salud y belleza.
+ *
+ * `foto` es la imagen que la propia clienta adjuntó a su reseña. Para añadir
+ * una nueva: cópiala de Judge.me, no la inventes.
+ */
 const TESTIMONIOS = [
-  { n: 'Claudia R.', m: '47 años · Bogotá', c: 'Menopausia temprana',
-    t: 'En 6 semanas noté que el cepillo tenía menos cabello. En 10 semanas mi cabello era diferente. Por fin algo que funciona de verdad.',
-    datos: [['−68%', 'Caída diaria'], ['+43%', 'Densidad'], ['Sem. 4', 'Primer cambio']] },
-  { n: 'Patricia M.', m: '36 años · Medellín', c: 'Cambio hormonal',
-    t: 'Nadie me había explicado que era hormonal. Cuando entendí la causa, confié en el proceso. Los resultados llegaron.',
-    datos: [['−74%', 'Caída diaria'], ['+51%', 'Densidad'], ['Sem. 7', 'Primer cambio']] },
-  { n: 'Lorena T.', m: '44 años · Cali', c: 'Caída por estrés',
-    t: 'Lo atribuía al estrés y lo dejé pasar. El protocolo fue fácil de incluir en mi rutina y los resultados llegaron sin que me diera cuenta. ¡100% recomendado!' },
-  { n: 'Sara R.', m: '37 años · Bogotá', c: 'Dos años con caída',
-    t: 'Llevaba dos años con el problema. En la semana 4 noté la diferencia. Nunca había entendido que era hormonal hasta que leí sobre Dermafol.' },
-  { n: 'Viviana Fernández', m: 'Bogotá', c: 'Caída después de los 30',
-    t: 'Por los trancones y el estrés después de los 30 se me empezó a caer el cabello. Luego de mes y medio tomando Dermafol y usando el serum bien juiciosa, he visto resultados increíbles.' },
-  { n: 'Maricela Torres', m: '36 años', c: 'Caída androgénica',
+  { n: 'Viviana Fernández', m: 'Bogotá', c: 'foto enviada por ella', e: 5,
+    foto: 'https://review-images.judgeme.com/dermafol/1777379449__img_6339__original.jpeg?quality=80&width=560',
+    t: 'Soy de Bogotá y por los trancones y el estrés después de los 30 se me empezó a caer el cabello. Gracias a Dios, luego de mes y medio tomando Dermafol y usando el serum bien juiciosa, he visto resultados increíbles.' },
+  { n: 'Maricela Torres', m: '36 años', c: 'foto enviada por ella', e: 5,
+    foto: 'https://review-images.judgeme.com/dermafol/1777344908__capturadepantalla2026-04-24alas103312am__original.png?quality=80&width=560',
     t: 'Mi cabello se empezó a caer mucho luego de que cumplí 36 años, era algo androgénico. Tomé Dermafol por casi dos meses y los resultados fueron excelentes.' },
-  { n: 'Beatriz Soto', m: 'Colombia', c: 'Caída por tracción',
+  { n: 'Beatriz Soto', m: 'Caída por tracción', c: 'foto enviada por ella', e: 4,
+    foto: 'https://review-images.judgeme.com/dermafol/1777345010__capturadepantalla2026-04-24alas103247am__original.png?quality=80&width=560',
     t: 'Desde pequeña mi madre me hacía muchas trenzas y por eso se me caía mucho el cabello. Dermafol me ayudó a que dejara de caerse, y ahorita empecé a ver pelitos nuevos creciendo.' },
-  { n: 'Gina Ortiz', m: 'Colombia', c: 'Clienta verificada', t: 'Me sirvió muchísimo. Muchas gracias.' },
-  { n: 'Amelia Osorio', m: 'Colombia', c: 'Clienta verificada', t: 'Muy buena calidad y llegó muy rápido. El producto, muy bien.' },
+  { n: 'Carolina Gómez', m: 'Caída por estrés', c: 'Clienta verificada', e: 5,
+    t: 'Me encantó mucho el producto, me sirvió mucho. Yo sufría de caída del cabello por el estrés de mi trabajo.' },
+  { n: 'Gina Ortiz', m: 'Colombia', c: 'Clienta verificada', e: 5,
+    t: 'Me sirvió muchísimo. Muchas gracias.' },
+  { n: 'Amelia Osorio', m: 'Colombia', c: 'Clienta verificada', e: 4,
+    t: 'Muy buena calidad. Llegó muy rápido y yo ese día no estaba en la casa, pero el producto muy bien.' },
 ];
 
 const FAQ = [
@@ -338,7 +348,7 @@ const hero = (o) => `
 
 <section class="hero"><div class="w"><div class="grid">
   <div>
-    <div class="rate"><span class="stars">★★★★★</span> 4.9 · Recomendado por dermatólogos</div>
+    <div class="rate"><span class="stars">★★★★★</span> 4.67 · 6 reseñas verificadas</div>
     <h1>Tu cabello no se cae por tu edad.<br><span class="em">Son tus hormonas.</span></h1>
     <p class="sub">Ya probaste productos que solo atacan la mitad del problema. Dermafol trata la causa hormonal y reactiva el folículo al mismo tiempo.</p>
   </div>
@@ -444,11 +454,11 @@ const resultados = (o) => `
   <div style="margin-bottom:14px">${foto(IMG.antesDespues, 560, 'Antes y después del protocolo Dermafol en 10 semanas', 'loading="lazy"')}</div>
   <p class="kick c" style="font-size:12.5px;margin-bottom:30px">Resultados de clientas reales. Pueden variar de una persona a otra.</p>
 
-  <div class="c" style="margin-bottom:18px"><div class="eye">Sus palabras, no las nuestras</div><h2>4.9 ★ · +500 opiniones</h2></div>
+  <div class="c" style="margin-bottom:18px"><div class="eye">Sus palabras, no las nuestras</div><h2>4.67 ★ · 6 reseñas verificadas</h2></div>
   <div class="riel">${TESTIMONIOS.map((t) => `
     <div class="tst">
-      <div class="stars">★★★★★</div>
-      ${t.datos ? `<div class="datos">${t.datos.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>` : ''}
+      ${t.foto ? `<img src="${t.foto}" alt="Foto que ${t.n} envió con su reseña" width="560" height="420" loading="lazy" decoding="async" style="width:calc(100% + 36px);margin:-18px -18px 14px;aspect-ratio:4/3;object-fit:cover;border-radius:16px 16px 0 0;display:block">` : ''}
+      <div class="stars">${'★'.repeat(t.e)}${'☆'.repeat(5 - t.e)}</div>
       <q>${t.t}</q>
       <div class="who"><div class="av">${t.n.charAt(0)}</div>
         <div><div class="nm">${t.n}</div><div class="mt">${t.m} · ${t.c}</div></div></div>
@@ -468,8 +478,27 @@ const tiempo = () => `
   </div>
 </div></section>`;
 
+/**
+ * Los planes se pintan desde las ofertas reales del producto, no fijos.
+ *
+ * El precio tachado de cada plan es `qty × 200.000`, el valor de comprar el
+ * suplemento (120.000) y el roll-on (80.000) por separado tantas veces como
+ * meses lleve el plan. Es el mismo desglose que muestra la lista de abajo.
+ *
+ * El índice de cada tarjeta es su `data-plan`, y el script del pie lo usa para
+ * mover el <select> del checkout: por eso el orden aquí tiene que ser el mismo
+ * que el de los <option>, que salen de `offers` ordenadas por `sort`.
+ */
 const oferta = (list) => {
-  const uno = list[0], dos = list[1] || list[0];
+  const uno = list[0];
+  const suelto = (o) => 200000 * (o.qty || 1);
+  // El plan recomendado es el del medio cuando hay tres; con dos, el segundo.
+  const best = list.length >= 3 ? 1 : Math.min(1, list.length - 1);
+  const glosa = {
+    1: 'Tratamiento completo de 1 mes. Envío gratis a toda Colombia.',
+    2: 'Dos meses seguidos, el mínimo para que el folículo responda.',
+    3: 'Tres meses: el ciclo capilar completo, que es lo que consolida el resultado.',
+  };
   return `
 <section class="s crema" id="oferta"><div class="w">
   <div class="c" style="margin-bottom:24px">
@@ -480,17 +509,14 @@ const oferta = (list) => {
   <div style="margin-bottom:20px">${foto(IMG.producto, 480, 'Combo Dermafol 360° con su empaque', 'loading="lazy"')}</div>
 
   <div class="planes">
-    <div class="plan" data-plan="0">
-      <div class="top"><div class="q">1 combo</div><div class="price"><b>${money(uno.price)}</b><s>${money(200000)}</s></div></div>
-      <div class="save">Ahorras ${money(200000 - uno.price)}</div>
-      <p class="desc">Tratamiento completo de 1 mes. Envío gratis a toda Colombia.</p>
-    </div>
-    <div class="plan best" data-plan="1">
-      <span class="badge">El ciclo capilar completo</span>
-      <div class="top"><div class="q">2 combos</div><div class="price"><b>${money(dos.price)}</b><s>${money(400000)}</s></div></div>
-      <div class="save">Ahorras ${money(400000 - dos.price)}</div>
-      <p class="desc">Hasta 3 meses, que es lo que el ciclo capilar necesita para consolidar resultados.</p>
-    </div>
+    ${list.map((o, i) => `
+    <div class="plan${i === best ? ' best' : ''}" data-plan="${i}">
+      ${i === best ? '<span class="badge">El más elegido</span>' : ''}
+      <div class="top"><div class="q">${o.qty} combo${o.qty > 1 ? 's' : ''}</div>
+        <div class="price"><b>${money(o.price)}</b><s>${money(suelto(o))}</s></div></div>
+      <div class="save">Ahorras ${money(suelto(o) - o.price)}</div>
+      <p class="desc">${glosa[o.qty] || `Tratamiento de ${o.qty} meses. Envío gratis a toda Colombia.`}</p>
+    </div>`).join('')}
   </div>
 
   <ul class="stack">

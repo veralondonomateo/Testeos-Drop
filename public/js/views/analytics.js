@@ -10,12 +10,22 @@ import { lineChart, smallMultiples, barChart, funnelChart, donutChart, legend, t
 import { setHeader, navigate } from '../app.js';
 
 const RANGES = [
+  { value: 'today', label: 'Hoy' },
+  { value: 'yesterday', label: 'Ayer' },
   { value: '7d', label: 'Últimos 7 días' },
   { value: '14d', label: 'Últimos 14 días' },
   { value: '30d', label: 'Últimos 30 días' },
   { value: '90d', label: 'Últimos 90 días' },
   { value: '365d', label: 'Último año' },
+  { value: 'day', label: 'Un día concreto…' },
 ];
+
+/** Hoy en la zona del negocio, que es la que usa el servidor para cortar el día. */
+const hoyKey = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date());
+
+const esDia = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export default async function analyticsView({ host }) {
   let range = localStorage.getItem('ds_range') || '30d';
@@ -23,14 +33,34 @@ export default async function analyticsView({ host }) {
   let products = [];
   const cleanups = [];
 
-  const rangeSel = selectControl(RANGES, range, (v) => {
-    range = v; localStorage.setItem('ds_range', v); load();
+  // Un día suelto se guarda como '2026-08-17'. El <select> muestra entonces la
+  // opción "Un día concreto…" y al lado aparece el calendario con esa fecha.
+  const dayInput = el('input', {
+    type: 'date', class: 'control', max: hoyKey(),
+    value: esDia(range) ? range : hoyKey(),
+    style: { display: esDia(range) ? '' : 'none', minWidth: '148px' },
+  });
+  dayInput.addEventListener('change', () => {
+    if (!dayInput.value) return;
+    range = dayInput.value; localStorage.setItem('ds_range', range); load();
+  });
+
+  const rangeSel = selectControl(RANGES, esDia(range) ? 'day' : range, (v) => {
+    if (v === 'day') {
+      dayInput.style.display = '';
+      range = dayInput.value || hoyKey();
+    } else {
+      dayInput.style.display = 'none';
+      range = v;
+    }
+    localStorage.setItem('ds_range', range);
+    load();
   }, { width: '168px' });
 
   const productSel = el('div');
 
   setHeader('Analíticas', 'Qué funciona, dónde se cae la gente y cuánto cuesta cada venta',
-    [productSel, rangeSel]);
+    [productSel, rangeSel, dayInput]);
 
   const content = el('div', { class: 'stack' });
   host.append(content);

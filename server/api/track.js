@@ -1,6 +1,7 @@
 import { insert, one } from '../db.js';
 import { id, nowISO, clean, toInt, detectDevice } from '../lib/util.js';
 import { createOrder, reportPurchase } from './orders.js';
+import { sendEvent } from './meta.js';
 
 const ALLOWED = new Set(['pageview', 'scroll_50', 'scroll_90', 'cta_click', 'checkout_open', 'checkout_abandon', 'order']);
 
@@ -25,7 +26,41 @@ export async function trackEvent(body, req) {
     is_demo: 0,
     created_at: nowISO(),
   });
+
+  // El mismo evento por la API de Conversiones, con el `event_id` que ya usó el
+  // píxel del navegador. Meta los une: uno se pierde con los bloqueadores, el
+  // otro no. Se espera la respuesta porque en serverless lo lanzado tras
+  // responder puede congelarse; `sendEvent` corta a los 2,5 s y nunca lanza.
+  // `meta_event` puede traer varios separados por coma: la visita dispara
+  // PageView y ViewContent, que son los dos que usa Meta para optimizar.
+  const eventos = clean(body.meta_event, 80).split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3);
+  if (eventos.length) {
+    const comun = {
+      sourceUrl: clean(body.source_url, 400),
+      contentIds: page?.product_id ? [page.product_id] : [],
+      fbp: clean(body.fbp, 120),
+      fbc: clean(body.fbc, 200),
+      clientIp: clientIp(req),
+      userAgent: clean(req.headers['user-agent'], 400),
+    };
+    // El event_id que mandó el navegador vale para el primero; los demás se
+    // derivan del mismo patrón `Evento_sesión` que usa el píxel.
+    const sid = clean(body.session_id, 60);
+    await Promise.all(eventos.map((ev, i) => sendEvent({
+      ...comun,
+      eventName: ev,
+      eventId: i === 0 ? (clean(body.meta_event_id, 120) || `${ev}_${sid}`) : `${ev}_${sid}`,
+      value: toInt(body.value),
+    })));
+  }
+
   return { ok: true };
+}
+
+/** IP real del visitante detrás del proxy de Vercel. */
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.socket?.remoteAddress || '';
 }
 
 /** Recibe el pedido enviado desde el formulario de la landing. */
@@ -41,7 +76,13 @@ export async function trackOrder(body, req) {
   // serverless el trabajo lanzado después de responder puede congelarse a mitad;
   // `sendPurchase` nunca lanza y corta a los 2,5 s, así que un Meta lento no
   // deja al cliente mirando el botón de confirmar.
-  await reportPurchase(order);
+  await reportPurchase(order, {
+    sourceUrl: clean(body.source_url, 400),
+    fbp: clean(body.fbp, 120),
+    fbc: clean(body.fbc, 200),
+    clientIp: clientIp(req),
+    userAgent: clean(req.headers['user-agent'], 400),
+  });
 
   return { ok: true, code: order.code, id: order.id, total: order.total };
 }

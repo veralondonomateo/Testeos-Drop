@@ -72,8 +72,8 @@ const logEvent = (orderId, type, message, actor = 'sistema') =>
  * Queda en la bitácora del pedido, también cuando falla: si el ROAS de Ads
  * Manager no cuadra con el del panel, la respuesta está ahí.
  */
-export async function reportPurchase(order) {
-  const r = await sendPurchase(order);
+export async function reportPurchase(order, señales = {}) {
+  const r = await sendPurchase(order, señales);
   const msg = r.ok ? `Compra reportada a Meta · ${order.code}`
     : r.skipped ? `Compra no reportada a Meta: ${r.skipped}`
     : `Falló el reporte a Meta: ${r.error}`;

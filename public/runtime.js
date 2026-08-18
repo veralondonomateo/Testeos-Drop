@@ -44,6 +44,34 @@
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
   }
 
+  /* ── Identificadores de Meta ───────────────────────────────────────────
+     `_fbp` y `_fbc` son las dos señales que más pesan al emparejar un evento
+     de servidor con la persona que hizo clic en el anuncio. Sin ellas la API
+     de Conversiones recibe el evento pero Meta no sabe a qué clic atribuirlo,
+     que es justo lo que hacía que un pedido no apareciera en Ads Manager.
+     ──────────────────────────────────────────────────────────────────── */
+
+  function cookie(name) {
+    var m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  // El píxel escribe `_fbc` solo si la landing se abre con `fbclid`. Cuando la
+  // persona navega dentro del sitio ese parámetro se pierde, así que en la
+  // primera visita se guarda a mano con el formato que Meta espera.
+  (function persistFbc() {
+    var fbclid = qs.get('fbclid');
+    if (!fbclid || cookie('_fbc')) return;
+    var val = 'fb.1.' + Date.now() + '.' + fbclid;
+    try {
+      document.cookie = '_fbc=' + val + ';path=/;max-age=' + (90 * 86400) + ';SameSite=Lax';
+    } catch (e) { /* sin cookies, seguimos con lo que haya */ }
+  })();
+
+  var fbIds = function () {
+    return { fbp: cookie('_fbp'), fbc: cookie('_fbc') };
+  };
+
   /* ── Envío de eventos ──────────────────────────────────────────────── */
 
   var sent = {};
@@ -53,8 +81,11 @@
   // Cada evento lleva su propio eventID. Hoy sólo sirve para no duplicar si
   // el usuario recarga; mañana permite deduplicar contra la API de
   // Conversiones sin tocar esta parte.
+  // El id tiene que ser el MISMO en el navegador y en el servidor para que Meta
+  // cuente una sola vez. Por eso se deriva de la sesión y el tipo, sin la hora:
+  // dos llamadas al mismo evento en la misma sesión son el mismo hecho.
   function eventId(name) {
-    return name + '_' + SID + '_' + Date.now().toString(36);
+    return name + '_' + SID;
   }
 
   function meta(event, params, id) {
@@ -64,12 +95,17 @@
     } catch (e) { /* que un fallo del píxel nunca rompa el checkout */ }
   }
 
-  function track(type, value) {
+  function track(type, value, meta_event) {
     if (CTX.preview) return;                  // el preview del panel no ensucia métricas
+    var ids = fbIds();
     var payload = JSON.stringify({
       type: type, page_id: CTX.pageId, session_id: SID, variant: CTX.variant,
       device: DEVICE, utm_source: UTM.utm_source, utm_campaign: UTM.utm_campaign,
       value: value || 0,
+      // Lo que necesita el servidor para repetir el evento por la API de
+      // Conversiones y que Meta lo deduplique contra el del navegador.
+      meta_event: meta_event || '', meta_event_id: meta_event ? eventId(meta_event) : '',
+      fbp: ids.fbp, fbc: ids.fbc, source_url: location.href,
     });
     try {
       if (navigator.sendBeacon) {
@@ -83,13 +119,16 @@
     }).catch(function () {});
   }
 
-  function once(type, value) {
+  function once(type, value, meta_event) {
     if (sent[type]) return;
     sent[type] = true;
-    track(type, value);
+    track(type, value, meta_event);
   }
 
-  once('pageview');
+  // PageView y ViewContent salen por navegador (arriba, en el <head>) y también
+  // por servidor, con el mismo event_id. El píxel del head ya los disparó, así
+  // que aquí sólo se pide el envío server-side de los dos.
+  once('pageview', 0, 'PageView,ViewContent');
 
   /* ── Profundidad de scroll ─────────────────────────────────────────── */
 
@@ -112,7 +151,7 @@
   document.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('a[href="#pedir"], [data-ds-cta]') : null;
     if (!el) return;
-    track('cta_click');
+    track('cta_click', 0, 'AddToCart');
 
     var o = (CTX.offers || [])[0];
     var carrito = {
@@ -136,7 +175,7 @@
 
     setTimeout(function () {
       if (sent.checkout_open) return;
-      once('checkout_open');
+      once('checkout_open', 0, 'InitiateCheckout');
       meta('InitiateCheckout', carrito);
     }, 60);
   }, true);

@@ -1,5 +1,5 @@
 import { all, one } from '../db.js';
-import { rangeBounds, dayRange, dayKey } from '../lib/util.js';
+import { rangeBounds, dayRange, dayKey, STORE_TZ } from '../lib/util.js';
 
 /**
  * Todas las métricas se calculan sobre un rango de fechas.
@@ -119,7 +119,14 @@ export async function overview(range = '30d', filters = {}) {
   };
 }
 
-/** Serie diaria: visitas, pedidos, ingresos e inversión — una fila por día. */
+/**
+ * Serie diaria: visitas, pedidos, ingresos e inversión — una fila por día.
+ *
+ * El día se recorta en la zona del negocio, no en UTC. Antes se agrupaba con
+ * `substr(created_at,1,10)`, que es rápido pero parte el día a medianoche UTC:
+ * en Bogotá eso mandaba todo lo de 7pm en adelante al día siguiente, y el
+ * "hoy" del panel nunca cuadraba con el de Meta.
+ */
 export async function dailySeries(days, filters = {}) {
   const fp = [];
   const fw = [];
@@ -127,12 +134,15 @@ export async function dailySeries(days, filters = {}) {
   if (filters.test_id) { fw.push('test_id = ?'); fp.push(filters.test_id); }
   const extra = fw.length ? ' AND ' + fw.join(' AND ') : '';
 
+  // created_at es TEXT ISO en UTC; se pasa a timestamptz y se lleva a la zona.
+  const DIA = `to_char((created_at::timestamptz AT TIME ZONE '${STORE_TZ}')::date, 'YYYY-MM-DD')`;
+
   const [viewsRows, orderRows, revRows, spendRows] = await Promise.all([
-    all(`SELECT substr(created_at,1,10) d, COUNT(DISTINCT session_id) n
+    all(`SELECT ${DIA} d, COUNT(DISTINCT session_id) n
          FROM events WHERE type = 'pageview'${extra} GROUP BY 1`, fp),
-    all(`SELECT substr(created_at,1,10) d, COUNT(*) n, COALESCE(SUM(total),0) gross
+    all(`SELECT ${DIA} d, COUNT(*) n, COALESCE(SUM(total),0) gross
          FROM orders WHERE status != 'cancelled'${extra} GROUP BY 1`, fp),
-    all(`SELECT substr(created_at,1,10) d, COALESCE(SUM(total),0) rev
+    all(`SELECT ${DIA} d, COALESCE(SUM(total),0) rev
          FROM orders WHERE status = 'delivered'${extra} GROUP BY 1`, fp),
     all(`SELECT date d, COALESCE(SUM(spend),0) s FROM ad_spend WHERE 1=1${extra} GROUP BY 1`, fp),
   ]);
