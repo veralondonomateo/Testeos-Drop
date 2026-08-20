@@ -88,15 +88,16 @@ export async function reportPurchase(order, señales = {}) {
  * Ventana en la que dos envíos del mismo teléfono por el mismo producto se
  * cuentan como un solo pedido.
  *
- * Sale de un caso real. El `session_id` vive en `sessionStorage`, que sobrevive
- * a una recarga: quien pedía, no veía clara la confirmación y recargaba la
- * página, se encontraba el formulario limpio y volvía a enviarlo. Salían dos
- * envíos contra entrega a la misma puerta, y el segundo se rechaza seguro. Los
- * casos que llegaron estaban a 19 y a 58 segundos, y uno de ellos era alguien
- * arreglando "Barrnquimla" por "Barranquilla".
+ * Sale de un caso real: desde `6bb30b9` el formulario vuelve a su estado
+ * inicial al reabrir el checkout, así que quien no vio la confirmación —o quiso
+ * corregir un dato— cerraba el panel, tocaba "pedir" y lo mandaba otra vez.
+ * Salían dos envíos contra entrega a la misma puerta, y el segundo se rechaza
+ * seguro. Los casos que llegaron estaban a 19 y a 58 segundos, y uno de ellos
+ * era alguien arreglando "Barrnquimla" por "Barranquilla".
  *
  * La guarda va en el servidor a propósito: es el único sitio que ve todos los
- * intentos, vengan de una recarga, de otra pestaña o de un doble toque.
+ * intentos, vengan de reabrir el checkout, de una recarga —el `session_id` vive
+ * en `sessionStorage` y la sobrevive— o de otra pestaña.
  *
  * Media hora es corta a propósito: el mismo cliente pidiendo al día siguiente
  * es un pedido nuevo de verdad y tiene que entrar.
