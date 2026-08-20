@@ -88,8 +88,15 @@
     return name + '_' + SID;
   }
 
+  // Un desarrollo en local no puede mandar eventos al píxel real: en el conjunto
+  // de datos apareció una compra con host 127.0.0.1, o sea alguien corriendo el
+  // servidor contra la base de producción. Esa compra no existe y el algoritmo
+  // aprende de ella igual.
+  var ES_LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+    || /\.local$/.test(location.hostname);
+
   function meta(event, params, id) {
-    if (CTX.preview || !CTX.meta_pixel || typeof window.fbq !== 'function') return;
+    if (CTX.preview || ES_LOCAL || !CTX.meta_pixel || typeof window.fbq !== 'function') return;
     try {
       window.fbq('track', event, params || {}, { eventID: id || eventId(event) });
     } catch (e) { /* que un fallo del píxel nunca rompa el checkout */ }
@@ -286,6 +293,10 @@
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
+        // Un reenvío del formulario no es una compra nueva: el servidor devolvió
+        // el pedido que ya existía y su Purchase ya salió con el primer envío.
+        if (res.data.duplicate) { showSuccess(res.data, offer); return; }
+
         // Purchase al tomar el pedido. En contra entrega el cliente todavía no
         // ha pagado, pero Meta necesita la señal ya: esperar a la entrega la
         // retrasa días y deja al algoritmo sin nada con que aprender.

@@ -82,6 +82,7 @@ export async function sendEvent({
   const pixelId = (pixels.meta || '').trim();
   const token = (pixels.meta_capi_token || '').trim();
   if (!pixelId || !token) return { ok: false, skipped: 'sin token de la API de Conversiones' };
+  if (esLocal(sourceUrl)) return { ok: false, skipped: 'evento de desarrollo, no se manda al píxel' };
 
   const user_data = user ? userData(user) : {};
   if (fbp) user_data.fbp = fbp;
@@ -132,11 +133,24 @@ export async function sendEvent({
  * pedido ni dejar al cliente sin su confirmación. Devuelve
  * `{ ok, skipped?, error? }` para que quien llame lo deje escrito.
  */
+/**
+ * Un pedido hecho contra un servidor local no puede llegar al píxel real. Pasó:
+ * en el conjunto de datos hay una compra con host 127.0.0.1, de alguien
+ * levantando el servidor contra la base de producción para probar.
+ */
+function esLocal(sourceUrl) {
+  try {
+    const h = new URL(sourceUrl).hostname;
+    return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(h) || h.endsWith('.local');
+  } catch { return false; }
+}
+
 export async function sendPurchase(order, { sourceUrl = '', eventTime = null, fbp = '', fbc = '', clientIp = '', userAgent = '' } = {}) {
   const pixels = await getSetting('pixels', {});
   const pixelId = (pixels.meta || '').trim();
   const token = (pixels.meta_capi_token || '').trim();
   if (!pixelId || !token) return { ok: false, skipped: 'sin token de la API de Conversiones' };
+  if (esLocal(sourceUrl)) return { ok: false, skipped: 'pedido de desarrollo, no se manda al píxel' };
 
   const body = {
     data: [{
