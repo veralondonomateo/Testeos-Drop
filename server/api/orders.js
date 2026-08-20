@@ -84,6 +84,43 @@ export async function reportPurchase(order, señales = {}) {
 /**
  * Crea un pedido. Se usa tanto desde el panel (manual) como desde la landing pública.
  */
+/**
+ * Ventana en la que dos envíos del mismo teléfono por el mismo producto se
+ * cuentan como un solo pedido.
+ *
+ * Sale de un caso real: desde `6bb30b9` el formulario vuelve a su estado
+ * inicial al reabrir el checkout, así que quien no vio la confirmación —o quiso
+ * corregir un dato— lo mandaba otra vez y salían dos envíos contra entrega a la
+ * misma puerta. Los casos que llegaron estaban a 19 y a 58 segundos, y uno de
+ * ellos era alguien arreglando "Barrnquimla" por "Barranquilla".
+ *
+ * Media hora es corta a propósito: el mismo cliente pidiendo al día siguiente
+ * es un pedido nuevo de verdad y tiene que entrar.
+ */
+const DUP_WINDOW_MIN = 30;
+
+/** Últimos 10 dígitos: iguala `+573006209579` con `3006209579`. */
+const phoneKey = (phone) => String(phone).replace(/\D/g, '').slice(-10);
+
+/**
+ * Busca un pedido reciente del mismo teléfono por el mismo producto.
+ *
+ * El `created_at` va primero y tiene índice, así que el `regexp_replace` —que
+ * no puede usarlo— sólo corre sobre los pedidos de la última media hora.
+ */
+async function findRecentOrder(phone, productId) {
+  const since = new Date(Date.now() - DUP_WINDOW_MIN * 60_000).toISOString();
+  return one(
+    `SELECT * FROM orders
+      WHERE created_at >= ?
+        AND is_demo = 0
+        AND product_id IS NOT DISTINCT FROM ?
+        AND regexp_replace(phone, '\\D', '', 'g') LIKE ?
+      ORDER BY created_at DESC LIMIT 1`,
+    [since, productId, `%${phoneKey(phone)}`]
+  );
+}
+
 export async function createOrder(body, { source = 'panel', actor = 'sistema' } = {}) {
   const name = clean(body.customer_name ?? body.name, 120);
   const phone = clean(body.phone, 40).replace(/\s+/g, ' ');
@@ -101,6 +138,36 @@ export async function createOrder(body, { source = 'panel', actor = 'sistema' } 
   const shipping = toInt(body.shipping ?? 0);
   const total = toInt(body.total ?? subtotal + shipping);
   const costTotal = toInt(body.cost_total ?? (product ? (product.cost * qty + product.ship_cost) : 0));
+
+  // Un segundo envío idéntico desde la landing no es una venta más: es el mismo
+  // cliente reintentando. Sólo aplica al formulario público; en el panel, dos
+  // pedidos seguidos del mismo cliente los crea alguien que ve la lista y sabe
+  // lo que hace.
+  if (source === 'landing') {
+    const dup = await findRecentOrder(phone, productId);
+    if (dup) {
+      // Si el reintento traía datos distintos se anotan en la bitácora en vez
+      // de pisar el pedido: así no se pierde una corrección de dirección y
+      // tampoco se sobrescribe una buena con una peor.
+      const distintos = Object.entries({
+        customer_name: name,
+        department: clean(body.department, 80),
+        city: clean(body.city, 80),
+        address: clean(body.address, 300),
+        // La oferta también: alguien que pide 1 combo y al minuto reenvía con 2
+        // no está duplicando, está subiendo el pedido. Se absorbe igual —dos
+        // envíos a la misma puerta es el error caro— pero queda escrito para
+        // que quien llama a confirmar lo vea.
+        offer_name: clean(body.offer_name ?? body.offer, 160),
+        total,
+      }).filter(([k, v]) => v && v !== dup[k]).map(([k, v]) => `${k}: ${v}`);
+
+      await logEvent(dup.id, 'note',
+        'Se ignoró un envío repetido del formulario (mismo teléfono y producto).'
+        + (distintos.length ? ` El reintento traía → ${distintos.join(' · ')}` : ''));
+      return { ...(await getOrder(dup.id)), duplicate: true };
+    }
+  }
 
   const customer = await upsertCustomer({
     name, phone, email: body.email, department: body.department,

@@ -70,6 +70,15 @@ export async function trackOrder(body, req) {
     device: clean(body.device, 20) || detectDevice(req.headers['user-agent'] || ''),
   }, { source: 'landing', actor: 'landing' });
 
+  // Envío repetido del formulario: `createOrder` devolvió el pedido que ya
+  // existía en vez de crear uno nuevo. Ni evento de embudo ni Purchase — los dos
+  // ya salieron con el primero, y repetirlos inflaría el embudo del panel y la
+  // columna de compras de Ads Manager. Se responde con la confirmación del
+  // pedido bueno para que el cliente la vea y no lo intente una tercera vez.
+  if (order.duplicate) {
+    return { ok: true, code: order.code, id: order.id, total: order.total, duplicate: true };
+  }
+
   await trackEvent({ ...body, type: 'order', value: order.total }, req);
 
   // El respaldo por servidor del Purchase del navegador. Se espera porque en
