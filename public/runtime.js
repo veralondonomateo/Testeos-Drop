@@ -406,4 +406,143 @@
     // El evento `order` lo registra el backend al crear el pedido — no se duplica aquí.
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
+
+  /* ── Pago por transferencia ────────────────────────────────────────── */
+
+  /**
+   * El botón de transferencia convive con el de contra entrega, no lo
+   * reemplaza. Toma el pedido por la misma ruta —mismo Purchase, misma guarda
+   * de duplicados— y además abre WhatsApp con los datos ya escritos, para que
+   * la clienta no los repita y quien atiende no los tenga que pedir.
+   *
+   * Va aparte del `submit` a propósito, aunque repita parte del cuerpo: contra
+   * entrega es lo que sostiene la venta hoy y no se toca. Si esto falla, aquel
+   * sigue exactamente igual.
+   */
+  var WA_NUMERO = '573226979106';
+
+  function urlWhatsApp(data, offer) {
+    var q = offer ? offer.qty : 1;
+    var ciudad = [value('city'), value('department')].filter(Boolean).join(', ');
+    var texto = [
+      '¡Hola! 💛 Quiero hacer mi compra por transferencia',
+      '',
+      '🧴 Producto: ' + ((CTX.product && CTX.product.name) || 'Combo Dermafol 360°'),
+      '📦 Cantidad: ' + q + (q === 1 ? ' combo' : ' combos'),
+      '💰 Total: $' + Number((offer && offer.price) || 0).toLocaleString('es-CO'),
+      '🧾 Pedido: ' + (data.code || '—'),
+      '',
+      '👤 Nombre: ' + value('customer_name'),
+      '📱 Celular: ' + value('phone'),
+      '📍 Ciudad: ' + ciudad,
+      '🏠 Dirección: ' + value('address'),
+      '',
+      '¿Me compartes los datos para transferir? 🙏✨',
+    ].join('\n');
+    return 'https://wa.me/' + WA_NUMERO + '?text=' + encodeURIComponent(texto);
+  }
+
+  function exitoTransferencia(data, url) {
+    ocultarFormulario();
+    form.setAttribute('data-ds-hecho', '1');
+    var panel = document.createElement('div');
+    panel.setAttribute('data-ds-done', '');
+    panel.innerHTML = ''
+      + '<div style="text-align:center;padding:8px 0 4px">'
+      + '  <div style="width:64px;height:64px;border-radius:50%;background:#e7f6ec;display:flex;'
+      + '       align-items:center;justify-content:center;margin:0 auto 18px">'
+      + '    <svg viewBox="0 0 24 24" width="32" height="32" fill="#25D366"><path d="M12 2a10 10 0 00-8.6 15L2 22l5.2-1.4A10 10 0 1012 2zm0 18a8 8 0 01-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1112 20z"/></svg>'
+      + '  </div>'
+      + '  <div style="font-size:22px;line-height:1.2;margin-bottom:8px">¡Ya casi!</div>'
+      + '  <p style="font-size:13.5px;color:#6E5A5B;line-height:1.55;margin-bottom:18px">'
+      + '    Guardamos tu pedido <b>' + (data.code || '') + '</b>.<br>'
+      + '    Te abrimos WhatsApp para pasarte los datos de la transferencia.</p>'
+      + '  <a href="' + url + '" target="_blank" rel="noopener" '
+      + '     style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;'
+      + '     color:#fff;font-weight:700;font-size:15px;padding:15px;border-radius:12px;min-height:52px">'
+      + '     ABRIR WHATSAPP</a>'
+      + '  <p style="font-size:12px;color:#8b7a7b;margin-top:12px">Si no se abre solo, toca el botón.</p>'
+      + '</div>';
+    form.appendChild(panel);
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-ds-transfer]') : null;
+    if (!btn || !form.contains(btn)) return;
+    e.preventDefault();
+    if (busy) return;
+    if (!validate()) return;
+
+    var offer = currentOffer();
+    var etiqueta = btn.innerHTML;
+    busy = true;
+    btn.disabled = true;
+    btn.style.opacity = '.7';
+    btn.innerHTML = 'Preparando tu pedido…';
+
+    fetch('/api/track/order', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        page_id: CTX.pageId,
+        product_id: CTX.productId,
+        test_id: CTX.testId,
+        variant: CTX.variant,
+        session_id: SID,
+        device: DEVICE,
+        customer_name: value('customer_name'),
+        phone: value('phone'),
+        email: value('email'),
+        department: value('department'),
+        city: value('city'),
+        address: value('address'),
+        notes: 'Pago por transferencia · se coordina por WhatsApp',
+        offer_name: offer ? offer.name : '',
+        qty: offer ? offer.qty : 1,
+        subtotal: offer ? offer.price : (CTX.product ? CTX.product.price : 0),
+        total: offer ? offer.price : (CTX.product ? CTX.product.price : 0),
+        payment_method: 'online',
+        utm_source: UTM.utm_source,
+        utm_medium: UTM.utm_medium,
+        utm_campaign: UTM.utm_campaign,
+        utm_content: UTM.utm_content,
+        fbp: fbIds().fbp, fbc: fbIds().fbc, source_url: location.href,
+      }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
+        var url = urlWhatsApp(res.data, offer);
+        exitoTransferencia(res.data, url);
+
+        // El Purchase sólo si el pedido es nuevo. Si el servidor devolvió uno
+        // que ya existía, su compra ya se contó y aquí sólo hay que llevar a la
+        // persona a WhatsApp.
+        if (!res.data.duplicate) {
+          meta('Purchase', {
+            content_ids: [CTX.productId || ''],
+            content_type: 'product',
+            content_name: offer ? offer.name : '',
+            num_items: offer ? offer.qty : 1,
+            value: res.data.total || (offer ? offer.price : 0),
+            currency: 'COP',
+            order_id: res.data.code || '',
+          }, res.data.code || undefined);
+        }
+
+        // Se deja respirar al píxel antes de salir de la página: `fbq` manda su
+        // baliza de forma asíncrona y navegar en el mismo tick la puede cortar.
+        // Aunque se pierda, la compra ya salió por la API de Conversiones desde
+        // el servidor, que es el camino que no depende del navegador.
+        setTimeout(function () { window.location.href = url; }, 250);
+      })
+      .catch(function (err) {
+        busy = false;
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.innerHTML = etiqueta;
+        showError(err.message);
+      });
+  }, true);
 })();
