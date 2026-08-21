@@ -475,7 +475,12 @@
       '',
       '¿Me compartes los datos para transferir? 🙏✨',
     ].join('\n');
-    return 'https://wa.me/' + WA_NUMERO + '?text=' + encodeURIComponent(texto);
+    // Directo a api.whatsapp.com, no a wa.me. El acortador redirige a este mismo
+    // destino pero por el camino se come los caracteres de más de dos bytes:
+    // `%F0%9F%92%9B` (💛) llega como `%EF%BF%BD`, el rombo de interrogación.
+    // Comprobado con los dos: por aquí los emojis llegan enteros.
+    return 'https://api.whatsapp.com/send?phone=' + WA_NUMERO
+      + '&text=' + encodeURIComponent(texto);
   }
 
   function exitoTransferencia(data, url) {
@@ -550,7 +555,6 @@
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
         var url = urlWhatsApp(res.data, offer);
-        exitoTransferencia(res.data, url);
 
         // El Purchase sólo si el pedido es nuevo. Si el servidor devolvió uno
         // que ya existía, su compra ya se contó y aquí sólo hay que llevar a la
@@ -567,11 +571,17 @@
           }, res.data.code || undefined);
         }
 
-        // Se deja respirar al píxel antes de salir de la página: `fbq` manda su
-        // baliza de forma asíncrona y navegar en el mismo tick la puede cortar.
-        // Aunque se pierda, la compra ya salió por la API de Conversiones desde
-        // el servidor, que es el camino que no depende del navegador.
-        setTimeout(function () { window.location.href = url; }, 250);
+        // A WhatsApp de inmediato: una pantalla intermedia con un botón "abrir
+        // WhatsApp" es un clic de más justo donde la persona ya decidió comprar.
+        // No hay que esperar al píxel: el servidor ya mandó la compra por la API
+        // de Conversiones antes de responder, así que la venta está contada aunque
+        // la baliza del navegador se corte al salir.
+        window.location.href = url;
+
+        // Red de seguridad: si a los 800 ms seguimos aquí, la navegación no
+        // ocurrió —bloqueada, o sin WhatsApp instalado— y entonces sí se pinta la
+        // confirmación con el enlace para abrirlo a mano.
+        setTimeout(function () { exitoTransferencia(res.data, url); }, 800);
       })
       .catch(function (err) {
         busy = false;
