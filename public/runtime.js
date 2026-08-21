@@ -239,10 +239,46 @@
     return true;
   }
 
-  ['customer_name', 'phone', 'department', 'city', 'address'].forEach(function (name) {
+  /* ── Cuántos datos faltan ──────────────────────────────────────────── */
+
+  /**
+   * El pie del modal es fijo: al abrirlo se ven los dos botones y sólo los
+   * primeros campos, así que el formulario parece de dos casillas y hay quien
+   * pulsa creyendo que ya terminó.
+   *
+   * El aviso va dentro del subtítulo del botón —no en una línea aparte— porque
+   * ahí no cuesta ni un píxel de alto, que es justo lo que falta, y está donde
+   * mira quien va a pulsar. El texto principal del botón no se toca: sigue
+   * siendo la llamada a la acción.
+   */
+  var REQUERIDOS = ['customer_name', 'phone', 'department', 'city', 'address'];
+  var subOriginal = null;
+
+  function cuantosFaltan() {
+    return REQUERIDOS.filter(function (name) {
+      var v = value(name);
+      return !v || (name === 'phone' && v.replace(/\D/g, '').length < 7);
+    }).length;
+  }
+
+  function pintarFaltan() {
+    // Se relee en cada pasada: mientras se envía, el botón cambia de contenido
+    // y una referencia guardada apuntaría a un nodo que ya no está.
+    var sub = submitBtn && submitBtn.querySelector('span');
+    if (!sub) return;
+    if (subOriginal === null) subOriginal = sub.innerHTML;
+    var n = cuantosFaltan();
+    if (!n) { sub.innerHTML = subOriginal; return; }
+    sub.textContent = n === 1 ? 'Te falta 1 dato por completar'
+      : 'Te faltan ' + n + ' datos por completar';
+  }
+
+  REQUERIDOS.forEach(function (name) {
     var el = form.querySelector('[name="' + name + '"]');
-    if (el) el.addEventListener('input', function () { markInvalid(el, false); });
+    if (el) el.addEventListener('input', function () { markInvalid(el, false); pintarFaltan(); });
   });
+  window.addEventListener('dsmodal', pintarFaltan);
+  pintarFaltan();
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
