@@ -108,6 +108,7 @@
     var payload = JSON.stringify({
       type: type, page_id: CTX.pageId, session_id: SID, variant: CTX.variant,
       device: DEVICE, utm_source: UTM.utm_source, utm_campaign: UTM.utm_campaign,
+      utm_content: UTM.utm_content,
       value: value || 0,
       // Lo que necesita el servidor para repetir el evento por la API de
       // Conversiones y que Meta lo deduplique contra el del navegador.
@@ -153,7 +154,99 @@
     });
   }, { passive: true });
 
+  /* ── Hasta dónde baja cada visita ──────────────────────────────────── */
+
+  /**
+   * Informa qué secciones alcanzó la persona y cuánto tiempo estuvo.
+   *
+   * Antes sólo existía "llegó al 50% de la página", y con una página de 18.000
+   * píxeles ese umbral no dice nada: el 97,7% no lo alcanzaba y no había forma
+   * de saber si se iban en el titular, en el precio o en los testimonios.
+   *
+   * Se usa scroll y no IntersectionObserver a propósito: el observador no
+   * dispara en todos los contextos y aquí el dato tiene que llegar siempre.
+   * Una sección cuenta como vista cuando su borde superior entra en la pantalla,
+   * y sólo se informa una vez por visita.
+   */
+  var secciones = [].slice.call(document.querySelectorAll('[data-seccion]'));
+  var vistas = {};
+  var masProfunda = 0;
+  var inicio = Date.now();
+
+  function medirProfundidad() {
+    var alto = window.innerHeight || 0;
+    for (var i = 0; i < secciones.length; i++) {
+      var s = secciones[i];
+      var n = Number(s.getAttribute('data-seccion') || 0);
+      if (vistas[n]) continue;
+      // El borde de arriba entró en pantalla: la sección empezó a verse.
+      if (s.getBoundingClientRect().top < alto * 0.9) {
+        vistas[n] = true;
+        if (n > masProfunda) masProfunda = n;
+        track('seccion', n);
+      }
+    }
+  }
+
+  if (secciones.length) {
+    var pendiente = false;
+    window.addEventListener('scroll', function () {
+      if (pendiente) return;
+      pendiente = true;
+      requestAnimationFrame(function () { pendiente = false; medirProfundidad(); });
+    }, { passive: true });
+
+    // Repaso cada segundo y medio además del scroll. No es redundancia
+    // gratuita: hay navegadores donde el evento de scroll no llega —se
+    // comprobó— y entonces la medición entera se perdería en silencio, que es
+    // la peor forma de fallar para algo cuyo trabajo es contar. Se apaga sola
+    // cuando ya se vieron todas las secciones.
+    var reloj = setInterval(function () {
+      medirProfundidad();
+      if (masProfunda >= secciones.length) clearInterval(reloj);
+    }, 1500);
+
+    medirProfundidad();   // lo que ya se ve al abrir
+  }
+
+  /**
+   * Al irse: cuántos segundos estuvo y hasta qué sección llegó.
+   *
+   * El tiempo separa dos cosas que en el embudo se ven iguales: quien rebota en
+   * tres segundos porque el anuncio prometía otra cosa, y quien lee dos minutos
+   * y aun así no compra. Son problemas distintos y se arreglan distinto.
+   */
+  var salidaEnviada = false;
+  function anotarSalida() {
+    if (salidaEnviada) return;
+    salidaEnviada = true;
+    track('salida', Math.min(3600, Math.round((Date.now() - inicio) / 1000)));
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') anotarSalida();
+  });
+  window.addEventListener('pagehide', anotarSalida);
+
   /* ── Clics en CTA / apertura de checkout ───────────────────────────── */
+
+  /**
+   * Si el formulario de pedido está a la vista ahora mismo.
+   *
+   * `checkout_open` se disparaba a los 60 ms del clic sin comprobar nada, así
+   * que salía idéntico a `cta_click` todos los días y ese peldaño del embudo
+   * no medía nada: era el mismo evento contado dos veces.
+   *
+   * Se mira el formulario y no el modal por su id porque cada landing lo abre
+   * a su manera —clase `open` aquí, otra cosa allá—, pero todas tienen un
+   * `[data-ds-form]` y sólo ocupa espacio en pantalla cuando el checkout está
+   * realmente abierto.
+   */
+  function checkoutAbierto() {
+    var f = document.querySelector('[data-ds-form]');
+    if (!f) return false;
+    var r = f.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('a[href="#pedir"], [data-ds-cta]') : null;
@@ -180,8 +273,11 @@
       meta('AddToCart', carrito);
     }
 
+    // Los 60 ms le dan tiempo al modal a abrirse; la comprobación es la que
+    // decide. Si el clic no abrió nada —el enlace no llevaba a ningún sitio, un
+    // script se cayó antes— no hay checkout que contar.
     setTimeout(function () {
-      if (sent.checkout_open) return;
+      if (sent.checkout_open || !checkoutAbierto()) return;
       once('checkout_open', 0, 'InitiateCheckout');
       meta('InitiateCheckout', carrito);
     }, 60);
@@ -192,22 +288,52 @@
   var form = document.querySelector('[data-ds-form]');
   if (!form) return;
 
+  // La validación del navegador se apaga a propósito. Los campos llevan
+  // `required`, así que al pulsar enviar con alguno vacío el navegador frenaba
+  // el submit y sacaba su propia burbuja —"Selecciona un elemento de la lista"—
+  // antes de que corriera la nuestra. Resultado: los avisos escritos para esta
+  // tienda no aparecían nunca y el teléfono corto o la dirección incompleta se
+  // explicaban con un texto genérico del sistema.
+  form.setAttribute('novalidate', '');
+
   var submitBtn = form.querySelector('[data-ds-submit]') || form.querySelector('button');
   var offers = CTX.offers || [];
   var busy = false;
 
+  /**
+   * La oferta que la persona tiene elegida ahora mismo.
+   *
+   * Conviven dos maneras de pintarla: un grupo de radios, donde las opciones se
+   * ven todas a la vez, y el <select> de las landings anteriores. Se leen igual
+   * porque de ambos sale el mismo trío —id, cantidad y precio— y el pedido no
+   * tiene por qué saber cuál de los dos vio quien lo hizo.
+   *
+   * Se relee en cada envío: si el formulario se restauró, la referencia que se
+   * capturó al cargar podría apuntar a un nodo que ya no está en la página.
+   */
   function currentOffer() {
-    // Se relee en cada envío: si el formulario se restauró, la referencia que
-    // se capturó al cargar podría apuntar a un nodo que ya no está en la página.
-    var offerSel = form.querySelector('[data-ds-offer]');
+    // Los radios primero, y sólo el marcado: `[data-ds-offer]` a secas
+    // devolvería el primero del grupo, que es justo el que no hay que cobrar
+    // cuando la persona eligió otro.
+    var radio = form.querySelector('input[type="radio"][data-ds-offer]:checked');
+    if (radio) return offerFromNode(radio, radio.value);
+
+    var offerSel = form.querySelector('select[data-ds-offer]');
     if (!offerSel) return offers[0] || null;
     var byId = offers.filter(function (o) { return o.id === offerSel.value; })[0];
     if (byId) return byId;
     var opt = offerSel.selectedOptions && offerSel.selectedOptions[0];
     if (!opt) return offers[0] || null;
+    return offerFromNode(opt, opt.textContent.trim());
+  }
+
+  /** La oferta del catálogo si el id cuadra; si no, lo que diga el propio nodo. */
+  function offerFromNode(node, nombre) {
+    var byId = offers.filter(function (o) { return o.id === node.value; })[0];
+    if (byId) return byId;
     return {
-      id: opt.value, name: opt.textContent.trim(),
-      qty: Number(opt.dataset.qty || 1), price: Number(opt.dataset.price || 0),
+      id: node.value, name: String(nombre || '').trim(),
+      qty: Number(node.dataset.qty || 1), price: Number(node.dataset.price || 0),
     };
   }
 
@@ -218,22 +344,119 @@
 
   function markInvalid(el, on) {
     if (!el) return;
+    // En una casilla el borde rojo no se ve —es de 17 px— así que el aviso lo
+    // da su recuadro con la clase `mal`, que pone `bloqueDe`.
+    if (el.type === 'checkbox') return;
     el.style.borderColor = on ? '#d03b3b' : '';
   }
 
+  /**
+   * Qué le falta a un campo, en palabras. Devuelve null si está bien.
+   *
+   * Es la única definición de las reglas: antes vivían duplicadas en `validate`
+   * y en `cuantosFaltan`, y se contradecían en cuanto se tocaba una.
+   *
+   * El teléfono pide diez dígitos exactos —los celulares colombianos los
+   * tienen— y la dirección un mínimo de seis caracteres, porque "cra 5" o "mi
+   * casa" llegan al transportador como una entrega que hay que adivinar y se
+   * devuelven.
+   */
+  /**
+   * El celular en los diez dígitos que espera la transportadora, o '' si no
+   * hay forma de sacarlos.
+   *
+   * Mucha gente tiene el número guardado con el indicativo y el autocompletado
+   * lo mete tal cual. Exigir diez dígitos a secas rechazaba "+57 300 123 4567",
+   * que es un número perfectamente bueno, con un aviso que decía que estaba
+   * mal. Se le quita el 57 de delante, o el 0 de la marcación antigua, en vez
+   * de mandar a la persona a corregir algo que no está mal.
+   */
+  function telefonoCol(v) {
+    var d = String(v || '').replace(/\D/g, '');
+    if (d.length === 12 && d.indexOf('57') === 0) d = d.slice(2);
+    else if (d.length === 11 && d.charAt(0) === '0') d = d.slice(1);
+    return d.length === 10 ? d : '';
+  }
+
+  function problema(name) {
+    // La casilla de compromiso no tiene texto que validar: o está marcada o no.
+    // Va aquí y no en `validate` para que el contador del botón, el aviso y el
+    // envío usen todos la misma regla, que es de lo que sirve tener un único
+    // sitio donde se decide si un campo está bien.
+    if (name === 'compromiso') {
+      var c = form.querySelector('[name="compromiso"]');
+      return !c || c.checked ? null : 'Marca la casilla para confirmar que recibirás tu pedido';
+    }
+    var v = value(name);
+    if (name === 'phone') {
+      return telefonoCol(v) ? null : 'Tu número de teléfono no está correcto. Ej: 3053765678';
+    }
+    if (name === 'address') {
+      return v.length >= 6 ? null : 'Pon tu dirección más completa para que logremos hacer la entrega';
+    }
+    if (v) return null;
+    if (name === 'customer_name') return 'Escribe tu nombre y apellido';
+    if (name === 'department') return 'Elige tu departamento';
+    if (name === 'city') return 'Elige tu ciudad';
+    return 'Completa este dato';
+  }
+
+  /** El bloque que envuelve al campo, donde cabe el aviso debajo. */
+  function bloqueDe(el) {
+    return (el.closest && el.closest('.dsx-f, .dsx-cmt, .field')) || el.parentElement;
+  }
+
+  function mostrarAviso(el, texto) {
+    var b = bloqueDe(el);
+    if (!b) return;
+    var p = b.querySelector('.dsx-err');
+    if (!p) {
+      p = document.createElement('p');
+      p.className = 'dsx-err';
+      // Con estilo propio para que el aviso también se vea en las landings
+      // que no traen la regla en su CSS.
+      p.style.cssText = 'margin:4px 0 0;font-size:11px;line-height:1.35;color:#c0392b';
+      b.appendChild(p);
+    }
+    p.textContent = texto;
+    p.style.display = 'block';
+    b.classList.add('mal');
+  }
+
+  function ocultarAviso(el) {
+    var b = bloqueDe(el);
+    if (!b) return;
+    var p = b.querySelector('.dsx-err');
+    if (p) p.style.display = 'none';
+    b.classList.remove('mal');
+  }
+
   function validate() {
-    var required = ['customer_name', 'phone', 'department', 'city', 'address'];
-    var firstBad = null;
-    required.forEach(function (name) {
+    // El número se deja escrito ya normalizado antes de enviarlo: lo que se
+    // guarda y lo que llega a la transportadora son los diez dígitos, no lo que
+    // vino del autocompletado.
+    var tel = form.querySelector('[name="phone"]');
+    if (tel) {
+      var limpio = telefonoCol(tel.value);
+      if (limpio) tel.value = limpio;
+    }
+
+    var primero = null;
+    REQUERIDOS.forEach(function (name) {
       var el = form.querySelector('[name="' + name + '"]');
-      var v = value(name);
-      var bad = !v || (name === 'phone' && v.replace(/\D/g, '').length < 7);
-      markInvalid(el, bad);
-      if (bad && !firstBad) firstBad = el;
+      if (!el) return;
+      var falla = problema(name);
+      markInvalid(el, !!falla);
+      if (falla) {
+        mostrarAviso(el, falla);
+        if (!primero) primero = el;
+      } else {
+        ocultarAviso(el);
+      }
     });
-    if (firstBad) {
-      firstBad.focus();
-      firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (primero) {
+      primero.focus();
+      primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return false;
     }
     return true;
@@ -251,14 +474,18 @@
    * mira quien va a pulsar. El texto principal del botón no se toca: sigue
    * siendo la llamada a la acción.
    */
-  var REQUERIDOS = ['customer_name', 'phone', 'department', 'city', 'address'];
+  // Dos listas y no una: `DATOS` son las casillas que la clienta rellena y
+  // `REQUERIDOS` es todo lo que hace falta para enviar. La casilla de
+  // compromiso está en la segunda pero no en la primera a propósito — el
+  // contador de `checkout_abandon` mide cuántos datos alcanzó a escribir, y si
+  // el denominador pasara de 5 a 6 las cifras de antes y de después dejarían de
+  // poder compararse justo cuando hace falta comparar.
+  var DATOS = ['customer_name', 'phone', 'department', 'city', 'address'];
+  var REQUERIDOS = DATOS.concat(['compromiso']);
   var subOriginal = null;
 
   function cuantosFaltan() {
-    return REQUERIDOS.filter(function (name) {
-      var v = value(name);
-      return !v || (name === 'phone' && v.replace(/\D/g, '').length < 7);
-    }).length;
+    return DATOS.filter(function (name) { return !!problema(name); }).length;
   }
 
   function pintarFaltan() {
@@ -268,17 +495,155 @@
     if (!sub) return;
     if (subOriginal === null) subOriginal = sub.innerHTML;
     var n = cuantosFaltan();
-    if (!n) { sub.innerHTML = subOriginal; return; }
+    // Con los datos completos pero la casilla sin marcar, un "te falta 1 dato"
+    // manda a buscar un campo vacío que no existe. Se nombra lo que falta.
+    if (!n) {
+      sub.innerHTML = problema('compromiso') ? 'Marca la casilla para continuar' : subOriginal;
+      return;
+    }
     sub.textContent = n === 1 ? 'Te falta 1 dato por completar'
       : 'Te faltan ' + n + ' datos por completar';
   }
 
-  REQUERIDOS.forEach(function (name) {
+  /** Sigue lo que se escribe en un campo para actualizar aviso y contador. */
+  function vigilarCampo(name) {
     var el = form.querySelector('[name="' + name + '"]');
-    if (el) el.addEventListener('input', function () { markInvalid(el, false); pintarFaltan(); });
-  });
+    if (!el) return;
+    // `change` además de `input` porque los desplegables de departamento y
+    // ciudad no emiten `input` en todos los navegadores.
+    ['input', 'change'].forEach(function (ev) {
+      el.addEventListener(ev, function () {
+        markInvalid(el, false);
+        // El aviso se retira en cuanto el dato queda bien, no antes: si se
+        // borrase al primer tecleo, quien escribe un teléfono corto vería
+        // desaparecer la explicación justo mientras la necesita.
+        if (!problema(name)) ocultarAviso(el);
+        pintarFaltan();
+      });
+    });
+  }
+
+  REQUERIDOS.forEach(vigilarCampo);
   window.addEventListener('dsmodal', pintarFaltan);
   pintarFaltan();
+
+  /* ── Departamentos y municipios ────────────────────────────────────── */
+
+  /**
+   * Rellena los dos desplegables con el listado oficial: 32 departamentos y
+   * 8.193 municipios. La ciudad depende del departamento y arranca bloqueada.
+   *
+   * El listado se pide la primera vez que se abre el checkout, no al cargar la
+   * página: son 54 KB comprimidos que no le sirven de nada al 96% que nunca
+   * llega al formulario.
+   */
+  var selDept = form.querySelector('[data-ds-dept]');
+  var selCity = form.querySelector('[data-ds-city]');
+  var ubicaciones = null;
+  var pidiendo = false;
+
+  function opciones(sel, lista, vacio) {
+    var frag = document.createDocumentFragment();
+    var o = document.createElement('option');
+    o.value = ''; o.textContent = vacio;
+    frag.appendChild(o);
+    for (var i = 0; i < lista.length; i++) {
+      var x = document.createElement('option');
+      x.value = lista[i]; x.textContent = lista[i];
+      frag.appendChild(x);
+    }
+    sel.innerHTML = '';
+    sel.appendChild(frag);
+  }
+
+  function pintarCiudades() {
+    if (!ubicaciones || !selCity) return;
+    var lista = ubicaciones[selDept.value] || [];
+    // Las dos casillas van una al lado de la otra y son estrechas: si la de
+    // ciudad dijera "Elige tu departamento" se leería igual que la de al lado
+    // y parecería repetida. Bloqueada explica qué falta; suelta, sólo invita.
+    opciones(selCity, lista, lista.length ? 'Elige…' : 'Primero el departamento');
+    selCity.disabled = !lista.length;
+    pintarFaltan();
+  }
+
+  function cargarUbicaciones() {
+    if (!selDept || ubicaciones || pidiendo) return;
+    pidiendo = true;
+    fetch('/co.json')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        ubicaciones = d;
+        opciones(selDept, Object.keys(d), 'Elige…');
+        selDept.addEventListener('change', pintarCiudades);
+        pintarCiudades();
+      })
+      .catch(function () {
+        // Si el listado no llega, los desplegables quedarían vacíos y sin
+        // salida. Se convierten en casillas de texto: es peor dato, pero deja
+        // comprar, que es lo que no se puede perder.
+        pidiendo = false;
+        [selDept, selCity].forEach(function (sel) {
+          if (!sel) return;
+          var t = document.createElement('input');
+          t.type = 'text'; t.name = sel.name; t.id = sel.id; t.required = true;
+          t.placeholder = sel === selDept ? 'Departamento' : 'Ciudad';
+          t.className = sel.className;
+          sel.parentNode.replaceChild(t, sel);
+        });
+        selDept = selCity = null;
+        // Los nuevos nodos necesitan sus propios oyentes: los del desplegable
+        // se fueron con él.
+        ['department', 'city'].forEach(vigilarCampo);
+        pintarFaltan();
+      });
+  }
+
+  window.addEventListener('dsmodal', cargarUbicaciones);
+  if (checkoutAbierto()) cargarUbicaciones();
+
+  /* ── Abandono del checkout ─────────────────────────────────────────── */
+
+  /**
+   * Quien abrió el formulario y se fue sin pedir, y hasta dónde llegó.
+   *
+   * Sin esto el embudo se corta justo donde está el agujero: 15 de cada 26 que
+   * abren el checkout no lo terminan y no había ni un dato de por qué. El
+   * número de campos completos viaja en `value`, así que 0 es "abrió y cerró
+   * sin escribir nada" y 4 es "se atascó en el último" — que son dos problemas
+   * distintos y se arreglan distinto.
+   *
+   * Se anota al irse de la página, no al cerrar el modal: cerrarlo y seguir
+   * leyendo no es abandonar, y quien se va con el formulario abierto —lo más
+   * común— no dispara ningún cierre que escuchar.
+   */
+  var maxCampos = 0;
+  var pedidoHecho = false;
+
+  function recordarAvance() {
+    var llenos = REQUERIDOS.length - cuantosFaltan();
+    if (llenos > maxCampos) maxCampos = llenos;
+  }
+
+  function anotarAbandono() {
+    if (!sent.checkout_open || pedidoHecho || sent.checkout_abandon) return;
+    sent.checkout_abandon = true;
+    recordarAvance();
+    track('checkout_abandon', maxCampos);
+  }
+
+  REQUERIDOS.forEach(function (name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    if (el) el.addEventListener('input', recordarAvance);
+  });
+
+  // Los dos: `visibilitychange` es el que sí llega en móvil cuando se cambia de
+  // app o se cierra la pestaña, y `pagehide` cubre la navegación normal. El
+  // propio evento se manda con sendBeacon, que sobrevive a la descarga.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') anotarAbandono();
+  });
+  window.addEventListener('pagehide', anotarAbandono);
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -418,6 +783,12 @@
   function showSuccess(data, offer) {
     var price = offer ? offer.price : 0;
     var money = '$' + String(price).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    // La cantidad va escrita en la confirmación porque el reclamo caro no es el
+    // que se resuelve por chat: es el que aparece en la puerta, cuando llegan
+    // dos cajas y la clienta creía haber pedido una y rechaza la entrega.
+    var q = offer ? Number(offer.qty || 1) : 1;
+    var cuantos = q + (q === 1 ? ' combo' : ' combos');
+    pedidoHecho = true;
     ocultarFormulario();
     form.setAttribute('data-ds-hecho', '1');
     var panel = document.createElement('div');
@@ -432,163 +803,23 @@
       + '  <div style="font-size:22px;line-height:1.2;margin-bottom:8px">¡Pedido confirmado!</div>'
       + '  <p style="font-size:13.5px;color:#6E5A5B;line-height:1.55;margin-bottom:18px">'
       + '    Te llamaremos en las próximas horas para confirmar la entrega.<br>'
-      + '    Pagas <b>' + money + '</b> en efectivo cuando lo recibas.</p>'
+      + '    Recibes <b>' + cuantos + '</b> y pagas <b>' + money + '</b> en efectivo.</p>'
       + '  <div style="border:1px dashed #ECDFD9;border-radius:12px;padding:14px;background:#FBF6F2">'
       + '    <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6E5A5B">Número de pedido</div>'
       + '    <div style="font-size:20px;font-weight:700;letter-spacing:.05em;margin-top:4px">' + (data.code || '—') + '</div>'
       + '  </div>'
+      // La guía se promete como regalo en el checkout, así que se entrega aquí
+      // mismo y no por un correo posterior: prometer algo que llega "después"
+      // es exactamente lo que hace dudar a quien paga contra entrega.
+      + '  <a href="/guia-anticaida.pdf" target="_blank" rel="noopener" data-ds-guia'
+      + '     style="display:block;margin-top:14px;padding:12px;border-radius:12px;border:1.5px solid #916e53;'
+      + '     color:#916e53;font-size:13.5px;font-weight:700;text-decoration:none">'
+      + '    Descargar tu guía anticaída'
+      + '    <span style="display:block;font-size:11px;font-weight:400;color:#6E5A5B;margin-top:2px">'
+      + '      9 páginas · tuya desde ya</span></a>'
       + '</div>';
     form.appendChild(panel);
     // El evento `order` lo registra el backend al crear el pedido — no se duplica aquí.
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-
-  /* ── Pago por transferencia ────────────────────────────────────────── */
-
-  /**
-   * El botón de transferencia convive con el de contra entrega, no lo
-   * reemplaza. Toma el pedido por la misma ruta —mismo Purchase, misma guarda
-   * de duplicados— y además abre WhatsApp con los datos ya escritos, para que
-   * la clienta no los repita y quien atiende no los tenga que pedir.
-   *
-   * Va aparte del `submit` a propósito, aunque repita parte del cuerpo: contra
-   * entrega es lo que sostiene la venta hoy y no se toca. Si esto falla, aquel
-   * sigue exactamente igual.
-   */
-  var WA_NUMERO = '573226979106';
-
-  function urlWhatsApp(data, offer) {
-    var q = offer ? offer.qty : 1;
-    var ciudad = [value('city'), value('department')].filter(Boolean).join(', ');
-    var texto = [
-      '¡Hola! 💛 Quiero hacer mi compra por transferencia',
-      '',
-      '🧴 Producto: ' + ((CTX.product && CTX.product.name) || 'Combo Dermafol 360°'),
-      '📦 Cantidad: ' + q + (q === 1 ? ' combo' : ' combos'),
-      '💰 Total: $' + Number((offer && offer.price) || 0).toLocaleString('es-CO'),
-      '🧾 Pedido: ' + (data.code || '—'),
-      '',
-      '👤 Nombre: ' + value('customer_name'),
-      '📱 Celular: ' + value('phone'),
-      '📍 Ciudad: ' + ciudad,
-      '🏠 Dirección: ' + value('address'),
-      '',
-      '¿Me compartes los datos para transferir? 🙏✨',
-    ].join('\n');
-    // Directo a api.whatsapp.com, no a wa.me. El acortador redirige a este mismo
-    // destino pero por el camino se come los caracteres de más de dos bytes:
-    // `%F0%9F%92%9B` (💛) llega como `%EF%BF%BD`, el rombo de interrogación.
-    // Comprobado con los dos: por aquí los emojis llegan enteros.
-    return 'https://api.whatsapp.com/send?phone=' + WA_NUMERO
-      + '&text=' + encodeURIComponent(texto);
-  }
-
-  function exitoTransferencia(data, url) {
-    ocultarFormulario();
-    form.setAttribute('data-ds-hecho', '1');
-    var panel = document.createElement('div');
-    panel.setAttribute('data-ds-done', '');
-    panel.innerHTML = ''
-      + '<div style="text-align:center;padding:8px 0 4px">'
-      + '  <div style="width:64px;height:64px;border-radius:50%;background:#e7f6ec;display:flex;'
-      + '       align-items:center;justify-content:center;margin:0 auto 18px">'
-      + '    <svg viewBox="0 0 24 24" width="32" height="32" fill="#25D366"><path d="M12 2a10 10 0 00-8.6 15L2 22l5.2-1.4A10 10 0 1012 2zm0 18a8 8 0 01-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1112 20z"/></svg>'
-      + '  </div>'
-      + '  <div style="font-size:22px;line-height:1.2;margin-bottom:8px">¡Ya casi!</div>'
-      + '  <p style="font-size:13.5px;color:#6E5A5B;line-height:1.55;margin-bottom:18px">'
-      + '    Guardamos tu pedido <b>' + (data.code || '') + '</b>.<br>'
-      + '    Te abrimos WhatsApp para pasarte los datos de la transferencia.</p>'
-      + '  <a href="' + url + '" target="_blank" rel="noopener" '
-      + '     style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25D366;'
-      + '     color:#fff;font-weight:700;font-size:15px;padding:15px;border-radius:12px;min-height:52px">'
-      + '     ABRIR WHATSAPP</a>'
-      + '  <p style="font-size:12px;color:#8b7a7b;margin-top:12px">Si no se abre solo, toca el botón.</p>'
-      + '</div>';
-    form.appendChild(panel);
-    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest ? e.target.closest('[data-ds-transfer]') : null;
-    if (!btn || !form.contains(btn)) return;
-    e.preventDefault();
-    if (busy) return;
-    if (!validate()) return;
-
-    var offer = currentOffer();
-    var etiqueta = btn.innerHTML;
-    busy = true;
-    btn.disabled = true;
-    btn.style.opacity = '.7';
-    btn.innerHTML = 'Preparando tu pedido…';
-
-    fetch('/api/track/order', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        page_id: CTX.pageId,
-        product_id: CTX.productId,
-        test_id: CTX.testId,
-        variant: CTX.variant,
-        session_id: SID,
-        device: DEVICE,
-        customer_name: value('customer_name'),
-        phone: value('phone'),
-        email: value('email'),
-        department: value('department'),
-        city: value('city'),
-        address: value('address'),
-        notes: 'Pago por transferencia · se coordina por WhatsApp',
-        offer_name: offer ? offer.name : '',
-        qty: offer ? offer.qty : 1,
-        subtotal: offer ? offer.price : (CTX.product ? CTX.product.price : 0),
-        total: offer ? offer.price : (CTX.product ? CTX.product.price : 0),
-        payment_method: 'online',
-        utm_source: UTM.utm_source,
-        utm_medium: UTM.utm_medium,
-        utm_campaign: UTM.utm_campaign,
-        utm_content: UTM.utm_content,
-        fbp: fbIds().fbp, fbc: fbIds().fbc, source_url: location.href,
-      }),
-    })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-      .then(function (res) {
-        if (!res.ok) throw new Error(res.data.error || 'No pudimos registrar tu pedido');
-        var url = urlWhatsApp(res.data, offer);
-
-        // El Purchase sólo si el pedido es nuevo. Si el servidor devolvió uno
-        // que ya existía, su compra ya se contó y aquí sólo hay que llevar a la
-        // persona a WhatsApp.
-        if (!res.data.duplicate) {
-          meta('Purchase', {
-            content_ids: [CTX.productId || ''],
-            content_type: 'product',
-            content_name: offer ? offer.name : '',
-            num_items: offer ? offer.qty : 1,
-            value: res.data.total || (offer ? offer.price : 0),
-            currency: 'COP',
-            order_id: res.data.code || '',
-          }, res.data.code || undefined);
-        }
-
-        // A WhatsApp de inmediato: una pantalla intermedia con un botón "abrir
-        // WhatsApp" es un clic de más justo donde la persona ya decidió comprar.
-        // No hay que esperar al píxel: el servidor ya mandó la compra por la API
-        // de Conversiones antes de responder, así que la venta está contada aunque
-        // la baliza del navegador se corte al salir.
-        window.location.href = url;
-
-        // Red de seguridad: si a los 800 ms seguimos aquí, la navegación no
-        // ocurrió —bloqueada, o sin WhatsApp instalado— y entonces sí se pinta la
-        // confirmación con el enlace para abrirlo a mano.
-        setTimeout(function () { exitoTransferencia(res.data, url); }, 800);
-      })
-      .catch(function (err) {
-        busy = false;
-        btn.disabled = false;
-        btn.style.opacity = '';
-        btn.innerHTML = etiqueta;
-        showError(err.message);
-      });
-  }, true);
 })();

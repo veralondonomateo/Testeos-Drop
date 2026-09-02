@@ -13,6 +13,8 @@ import * as Pages from './api/pages.js';
 import * as Tests from './api/tests.js';
 import * as Analytics from './api/analytics.js';
 import * as Track from './api/track.js';
+import * as Despacho from './api/despacho.js';
+import * as Inversion from './api/inversion.js';
 import { purgeDemoData, hasDemoData } from './seed.js';
 
 const router = new Router();
@@ -135,6 +137,46 @@ router.post('/api/orders/bulk-status', async ({ ctx, body }) => {
   return Orders.bulkStatus(body.ids, body.status, u.name);
 });
 router.delete('/api/orders/:id', async ({ ctx, params }) => (auth(ctx), Orders.deleteOrder(params.id)));
+
+/* ── Despacho a Mastershop ────────────────────────────────────────────── */
+
+/**
+ * Recoge los pedidos que no llegaron a Mastershop en su momento.
+ *
+ * El despacho se intenta dentro del checkout, pero ahí puede fallar por mil
+ * razones —la API caída, un corte de red, la función que se corta—. Sin esta
+ * barrida, esos pedidos se quedarían esperando a que alguien los mire.
+ *
+ * Lo dispara el cron de Vercel, que se identifica con `CRON_SECRET`; desde el
+ * panel también se puede forzar con la sesión iniciada.
+ */
+router.get('/api/despacho/pendientes', async ({ ctx, req, res }) => {
+  const secreto = process.env.CRON_SECRET;
+  const cabecera = String(req.headers.authorization || '');
+  const esCron = secreto && cabecera === `Bearer ${secreto}`;
+  if (!esCron) auth(ctx);
+  return { resultados: await Despacho.reintentarPendientes(), resumen: await Despacho.resumenDespacho() };
+});
+
+router.get('/api/despacho/estado', async ({ ctx }) => (auth(ctx), Despacho.resumenDespacho()));
+
+/* ── Inversión publicitaria ───────────────────────────────────────────── */
+
+/**
+ * Trae de Meta lo invertido y lo deja en `ad_spend`, que es de donde el panel
+ * saca el CPA y el ROAS. Antes había que cargarlo a mano y por eso salían en
+ * cero. Lo dispara el mismo cron que el despacho, con su propio horario.
+ */
+router.get('/api/inversion/sincronizar', async ({ ctx, req }) => {
+  const secreto = process.env.CRON_SECRET;
+  const esCron = secreto && String(req.headers.authorization || '') === `Bearer ${secreto}`;
+  if (!esCron) auth(ctx);
+  return Inversion.sincronizarInversion();
+});
+
+router.get('/api/inversion', async ({ ctx, query }) => (
+  auth(ctx), { dias: await Inversion.resumenInversion(Number(query.dias) || 7) }
+));
 
 router.get('/api/orders-export.csv', async ({ ctx, query, res }) => {
   auth(ctx);

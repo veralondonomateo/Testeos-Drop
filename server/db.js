@@ -388,6 +388,7 @@ CREATE TABLE IF NOT EXISTS events (
   device       TEXT DEFAULT '',
   utm_source   TEXT DEFAULT '',
   utm_campaign TEXT DEFAULT '',
+  utm_content  TEXT DEFAULT '',
   value        INTEGER NOT NULL DEFAULT 0,
   is_demo      INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL
@@ -414,10 +415,20 @@ CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_test    ON orders(test_id);
 CREATE INDEX IF NOT EXISTS idx_orders_page    ON orders(page_id);
+-- CREATE TABLE IF NOT EXISTS no altera una tabla que ya existe, así que la
+-- columna nueva se añade aparte. Es idempotente: al arrancar se ejecuta siempre
+-- y no hace nada si ya está.
+--
+-- Sin utm_content sabíamos qué anuncio vendía —los pedidos sí lo guardan— pero
+-- no cuál traía gente que rebotaba en tres segundos, que es la mitad cara del
+-- gasto. Los eventos anteriores al 1-sep-2026 lo tienen vacío.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS utm_content TEXT DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_page    ON events(page_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
+CREATE INDEX IF NOT EXISTS idx_events_content ON events(utm_content);
 CREATE INDEX IF NOT EXISTS idx_spend_date     ON ad_spend(date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user  ON sessions(user_id);
 `);

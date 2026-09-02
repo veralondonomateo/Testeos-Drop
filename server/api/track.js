@@ -2,8 +2,13 @@ import { insert, one } from '../db.js';
 import { id, nowISO, clean, toInt, detectDevice } from '../lib/util.js';
 import { createOrder, reportPurchase } from './orders.js';
 import { sendEvent } from './meta.js';
+import { marcarParaDespacho } from './despacho.js';
 
-const ALLOWED = new Set(['pageview', 'scroll_50', 'scroll_90', 'cta_click', 'checkout_open', 'checkout_abandon', 'order']);
+// `seccion` lleva en `value` el número de sección alcanzada y `salida` los
+// segundos que duró la visita. Juntos dicen dónde para la gente y si se va
+// rebotando o después de leer, que son problemas distintos.
+const ALLOWED = new Set(['pageview', 'scroll_50', 'scroll_90', 'cta_click',
+  'checkout_open', 'checkout_abandon', 'order', 'seccion', 'salida']);
 
 /** Registra un evento de la landing pública. Silencioso ante datos basura. */
 export async function trackEvent(body, req) {
@@ -22,6 +27,7 @@ export async function trackEvent(body, req) {
     device: clean(body.device, 20) || detectDevice(req.headers['user-agent'] || ''),
     utm_source: clean(body.utm_source, 80),
     utm_campaign: clean(body.utm_campaign, 120),
+    utm_content: clean(body.utm_content, 120),
     value: toInt(body.value),
     is_demo: 0,
     created_at: nowISO(),
@@ -92,6 +98,12 @@ export async function trackOrder(body, req) {
     clientIp: clientIp(req),
     userAgent: clean(req.headers['user-agent'], 400),
   });
+
+  // Sólo se marca para despacho: quien lo manda a Mastershop es la barrida del
+  // cron, unos minutos después. Hacerlo aquí costaba hasta 10 s de la respuesta
+  // del checkout. Si esta marca falla, el pedido queda sin estado y la barrida
+  // lo recoge igual, porque también toma los que no tienen ninguno.
+  await marcarParaDespacho(order).catch(() => {});
 
   return { ok: true, code: order.code, id: order.id, total: order.total };
 }
