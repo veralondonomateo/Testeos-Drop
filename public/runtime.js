@@ -621,7 +621,13 @@
   var pedidoHecho = false;
 
   function recordarAvance() {
-    var llenos = REQUERIDOS.length - cuantosFaltan();
+    // Contra `DATOS` y no contra `REQUERIDOS`. Cuando se añadió la casilla de
+    // compromiso, `REQUERIDOS` pasó a tener 6 elementos mientras `cuantosFaltan`
+    // seguía midiendo sobre los 5 datos: un checkout sin tocar reportaba
+    // 6 - 5 = 1 campo lleno en vez de 0, y con eso desaparecía de los informes
+    // justo el grupo más numeroso —quien abre y no escribe nada—, que es el que
+    // dice dónde está la fuga.
+    var llenos = DATOS.length - cuantosFaltan();
     if (llenos > maxCampos) maxCampos = llenos;
   }
 
