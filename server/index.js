@@ -404,7 +404,7 @@ export async function handler(req, res) {
       // por la función —hace falta para que un dominio de marca no reciba el
       // panel desde el CDN— así que hay que servirlo aquí explícitamente en vez
       // de confiar en que el estático llegue antes.
-      if (serveStatic(res, PUBLIC_DIR, 'index.html')) return;
+      if (serveStatic(res, PUBLIC_DIR, 'panel.html')) return;
     }
 
     const match = router.match(req.method, pathname);
@@ -419,11 +419,11 @@ export async function handler(req, res) {
     // En Vercel los estáticos los sirve el CDN antes de llegar aquí; esta rama
     // es la que atiende el desarrollo local.
     if (req.method === 'GET') {
-      const rel = pathname === '/' ? 'index.html' : pathname.slice(1);
+      const rel = pathname === '/' ? 'panel.html' : pathname.slice(1);
       const immutable = /\.(woff2|png|jpe?g|svg|webp)$/.test(rel);
       if (serveStatic(res, PUBLIC_DIR, rel, { immutable })) return;
       if (!pathname.startsWith('/api/') && !/\.[a-z0-9]{2,5}$/i.test(pathname)) {
-        if (serveStatic(res, PUBLIC_DIR, 'index.html')) return;
+        if (serveStatic(res, PUBLIC_DIR, 'panel.html')) return;
       }
     }
 

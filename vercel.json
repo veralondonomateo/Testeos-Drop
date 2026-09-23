@@ -3,7 +3,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 15,
-      "includeFiles": "public/index.html"
+      "includeFiles": "public/panel.html"
     }
   },
   "crons": [
