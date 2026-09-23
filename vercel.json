@@ -32,6 +32,10 @@
     {
       "source": "/t/:code",
       "destination": "/api/index"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
     }
   ],
   "headers": [

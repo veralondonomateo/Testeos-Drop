@@ -16,6 +16,7 @@ import * as Track from './api/track.js';
 import * as Despacho from './api/despacho.js';
 import * as Inversion from './api/inversion.js';
 import * as Tiendas from './api/tiendas.js';
+import * as Vitrina from './tienda/rutas.js';
 import { purgeDemoData, hasDemoData } from './seed.js';
 
 const router = new Router();
@@ -178,6 +179,20 @@ router.get('/api/inversion/sincronizar', async ({ ctx, req }) => {
 router.get('/api/inversion', async ({ ctx, query }) => (
   auth(ctx), { dias: await Inversion.resumenInversion(Number(query.dias) || 7) }
 ));
+
+/**
+ * Seguimiento público de un pedido.
+ *
+ * Devuelve sólo el estado y la guía: nunca el teléfono, la dirección ni el
+ * nombre. Quien consulta escribe un código que cabe en un mensaje reenviado, y
+ * con eso no puede convertirse en una forma de sacar datos de clientas.
+ */
+router.get('/api/seguimiento/:code', async ({ params }) => {
+  const code = String(params.code || '').trim().toUpperCase().slice(0, 24);
+  if (!/^[A-Z0-9-]{4,24}$/.test(code)) return { encontrado: false };
+  const o = await Orders.seguimientoPublico(code);
+  return o || { encontrado: false };
+});
 
 /* ── Tiendas ──────────────────────────────────────────────────────────── */
 
@@ -383,6 +398,23 @@ export async function handler(req, res) {
     const cookies = parseCookies(req);
     const token = cookies[Auth.COOKIE_NAME];
     const ctx = { token, user: await Auth.userFromToken(token) };
+
+    // Las rutas de la tienda de una marca, antes que nada.
+    //
+    // Van aquí y no como rutas del enrutador porque su significado depende del
+    // host: "/catalogo" es la tienda en dermafol.co y no existe en ningún otro
+    // sitio. Resolverlo antes deja el enrutador con una sola responsabilidad.
+    if (req.method === 'GET' && Vitrina.ES_DE_TIENDA(pathname)) {
+      const tienda = await Tiendas.tiendaDeHost(req.headers.host);
+      if (tienda && tienda.id === 'tnd_dermafol') {
+        const pagina = Vitrina.resolver(pathname);
+        if (pagina) {
+          return html(res, pagina, 200,
+            { 'cache-control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=900' });
+        }
+        return html(res, Vitrina.paginaNoEncontrada(), 404, { 'cache-control': 'no-store' });
+      }
+    }
 
     // La raíz de un dominio de marca sirve su tienda, no el panel.
     //

@@ -319,6 +319,39 @@ const CSV_COLS = [
   ['utm_source', 'Fuente'], ['utm_campaign', 'Campaña'], ['variant', 'Variante'], ['notes', 'Notas'],
 ];
 
+/**
+ * El estado de un pedido para la clienta, sin datos personales.
+ *
+ * Devuelve estado, detalle y guía y nada más. Quien consulta sólo escribe un
+ * código que viaja en un WhatsApp reenviado; si esto devolviera el nombre, el
+ * teléfono o la dirección, sería una forma de sacar datos de clientas con sólo
+ * adivinar códigos.
+ */
+const ETAPAS = {
+  pending:   ['En confirmación', 'Te escribimos por WhatsApp para confirmar la entrega. Responde ese mensaje para que podamos despacharlo.'],
+  confirmed: ['Confirmado', 'Tu pedido está confirmado y entra a despacho.'],
+  shipped:   ['En camino', 'Ya salió hacia tu dirección. La entrega toma de 2 a 4 días hábiles.'],
+  delivered: ['Entregado', 'El pedido figura como entregado. Si algo no está bien, escríbenos.'],
+  cancelled: ['Cancelado', 'Este pedido fue cancelado. Si fue un error, escríbenos y lo reactivamos.'],
+};
+
+export async function seguimientoPublico(code) {
+  const o = await one(
+    `SELECT code, status, courier, tracking FROM orders WHERE upper(code) = upper(?) AND is_demo = 0`,
+    [code]
+  );
+  if (!o) return null;
+  const [estado, detalle] = ETAPAS[o.status] || ['En proceso', 'Estamos preparando tu pedido.'];
+  return {
+    encontrado: true,
+    code: o.code,
+    estado,
+    detalle,
+    guia: o.tracking || null,
+    transportadora: o.courier || null,
+  };
+}
+
 export async function ordersCSV(query = {}) {
   const { orders } = await listOrders({ ...query, limit: 5000 });
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
