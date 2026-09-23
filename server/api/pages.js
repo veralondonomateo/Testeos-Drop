@@ -55,6 +55,7 @@ export async function listPages(query = {}) {
   const params = [];
   if (query.product_id) { where.push('product_id = ?'); params.push(query.product_id); }
   if (query.test_id) { where.push('test_id = ?'); params.push(query.test_id); }
+  if (query.tienda_id) { where.push('tienda_id = ?'); params.push(query.tienda_id); }
   if (query.q) { where.push('(title ILIKE ? OR slug ILIKE ?)'); params.push(`%${query.q}%`, `%${query.q}%`); }
   const rows = await all(
     `SELECT ${LIGHT} FROM pages ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC`,

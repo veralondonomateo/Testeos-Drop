@@ -440,12 +440,18 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS utm_content TEXT DEFAULT '';
 -- mientras las marcas se migran una a una.
 ALTER TABLE pages ADD COLUMN IF NOT EXISTS tienda_id TEXT;
 
+-- A qué marca pertenece cada producto. Es la dimensión por la que se separan
+-- los informes: un pedido es de Dermafol o de Plasma según su producto, y sin
+-- esto habría que mantener a mano una lista de ids en cada consulta.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS tienda_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_page    ON events(page_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_content ON events(utm_content);
 CREATE INDEX IF NOT EXISTS idx_pages_tienda    ON pages(tienda_id);
+CREATE INDEX IF NOT EXISTS idx_products_tienda ON products(tienda_id);
 CREATE INDEX IF NOT EXISTS idx_tiendas_dominio ON tiendas(lower(dominio));
 CREATE INDEX IF NOT EXISTS idx_spend_date     ON ad_spend(date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user  ON sessions(user_id);

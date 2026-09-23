@@ -28,11 +28,13 @@ const encabezado = (eyebrow, titulo, lede) => `<section class="sec pagina-top"><
   ${lede ? `<p class="lede" style="max-width:640px;margin-top:14px">${esc(lede)}</p>` : ''}
 </div></section>`;
 
+const urlProducto = (p) => p.enlace || `/producto/${p.slug}`;
+
 const tarjetaProducto = (p) => `<article class="prod card">
-  <a href="/producto/${p.slug}" class="foto"><img src="${p.imagen}" alt="${esc(p.nombre)}" width="700" height="700" loading="lazy"${p.encuadre ? ` style="object-position:${p.encuadre}"` : ''}></a>
+  <a href="${urlProducto(p)}" class="foto"><img src="${p.imagen}" alt="${esc(p.nombre)}" width="700" height="700" loading="lazy"${p.encuadre ? ` style="object-position:${p.encuadre}"` : ''}></a>
   <div class="cuerpo">
     ${p.destacado ? '<span class="tag">Más vendido</span>' : ''}
-    <h3><a href="/producto/${p.slug}">${esc(p.nombre)}</a></h3>
+    <h3><a href="${urlProducto(p)}">${esc(p.nombre)}</a></h3>
     <p class="kick">${esc(p.tagline)}</p>
     <div class="precio"><b>${pesos(p.precio)}</b>${p.antes ? `<s>${pesos(p.antes)}</s>` : ''}</div>
     <button class="btn btn-b btn-s" type="button" data-add="${p.slug}">Añadir al carrito</button>
@@ -78,6 +80,11 @@ const CSS = `
 .crema{background:var(--crema)}
 .pagina-top{padding-bottom:0}
 .nota{font-size:12.5px;color:var(--tinta-tenue);margin:18px 0 0}
+/* Muro de fotos reales. Doce y no veinte: con más, la página pesa de más y
+   nadie las mira todas; con menos, no se lee como un muro. */
+.muro{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:24px 0 0}
+.muro img{aspect-ratio:1/1;object-fit:cover;border-radius:10px;background:var(--crema);width:100%}
+@media(min-width:720px){ .muro{grid-template-columns:repeat(6,1fr);gap:9px} }
 
 /* portada */
 .hero{background:var(--crema);border-radius:var(--radio);overflow:hidden;
@@ -214,7 +221,7 @@ export function home() {
       <h1>Tu cabello no se cae por tu edad. Son tus hormonas.</h1>
       <p class="lede">Trata la causa desde adentro y reactiva el folículo desde afuera. Las dos cosas a la vez, que es lo que ningún producto suelto hace.</p>
       <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">Registro INVIMA</span></div>
-      <a class="btn" href="/producto/combo-dermafol-360">Empieza tu protocolo</a>
+      <a class="btn" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
       <div class="bajo"><span>✓ Envío gratis a todo el país</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
     </div>
     <div class="im" style="background-image:url('/assets/tienda/mujer-sonriendo.jpg')"></div>
@@ -251,12 +258,15 @@ ${bloqueGarantia()}
 ${bloqueFaq(FAQ.slice(0, 5), 'Lo que necesitas saber antes de empezar')}
 
 <section class="sec crema"><div class="w">
-  <p class="eyebrow">Guías</p><h2>Entender la caída es el primer paso</h2>
-  <div class="g3" style="margin-top:24px">${GUIAS.map((g) => `<a class="card" href="/guias/${g.slug}" style="text-decoration:none">
-    <img src="${g.imagen}" alt="" width="700" height="500" loading="lazy" style="aspect-ratio:7/5;object-fit:cover">
-    <div style="padding:16px"><h3 style="font-size:16px">${esc(g.titulo)}</h3>
-      <p style="font-size:13.5px;color:var(--tinta-suave);margin:7px 0 0">${esc(g.resumen)}</p>
-      <span style="font-size:12px;color:var(--tinta-tenue);display:block;margin-top:9px">${g.minutos} min de lectura</span></div></a>`).join('')}</div>
+  <p class="eyebrow">Fotos que nos enviaron ellas</p>
+  <h2>Veinte clientas, veinte historias</h2>
+  <p class="lede" style="max-width:600px;margin-top:10px">Nos las mandaron por WhatsApp y nos autorizaron a publicarlas. Sin retoques y sin modelos.</p>
+  <div class="muro">${Array.from({ length: 12 }, (_, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return `<img src="/assets/testimonios/t${n}.jpg" alt="Foto enviada por una clienta" width="420" height="420" loading="lazy">`;
+  }).join('')}</div>
+  <p class="nota">Resultados de clientas reales. Pueden variar de una persona a otra.</p>
+  <a class="btn" style="margin-top:18px" href="/p/dermafol-360-v2">Empezar mi protocolo</a>
 </div></section>`;
   return documento({
     titulo: 'Dermafol · Cuidado capilar con respaldo clínico',
@@ -319,7 +329,7 @@ ${bloqueFaq(FAQ.slice(0, 5))}`;
 
 export function producto(slug) {
   const p = productoPorSlug(slug);
-  if (!p) return null;
+  if (!p || p.enlace) return null;   // el kit vive en su landing, no aquí
   const multi = p.variantes.length > 1;
   const cuerpo = `
 <section class="sec" style="padding-bottom:0"><div class="w">

@@ -59,6 +59,7 @@ async function enrich(t) {
 export async function listTests(query = {}) {
   const where = [];
   const params = [];
+  if (query.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(query.tienda_id); }
   if (query.status) { where.push('status = ?'); params.push(query.status); }
   if (query.product_id) { where.push('product_id = ?'); params.push(query.product_id); }
   const rows = await all(

@@ -23,6 +23,7 @@ export async function listOrders(query = {}) {
   const params = [];
   if (query.status && ORDER_STATUS[query.status]) { where.push('o.status = ?'); params.push(query.status); }
   if (query.product_id) { where.push('o.product_id = ?'); params.push(query.product_id); }
+  if (query.tienda_id) { where.push('o.product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(query.tienda_id); }
   if (query.test_id) { where.push('o.test_id = ?'); params.push(query.test_id); }
   if (query.from) { where.push('o.created_at >= ?'); params.push(query.from); }
   if (query.to) { where.push('o.created_at <= ?'); params.push(query.to); }

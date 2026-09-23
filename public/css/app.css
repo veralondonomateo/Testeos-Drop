@@ -1,14 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   DropStudio · sistema de diseño
+   VERA & CO · sistema de diseño del panel
    Tipografía: Questrial (display) + Poppins (interfaz)
-   Paleta neutra + serie de datos validada para daltonismo en ambos modos.
+   Paleta de la identidad del grupo, muestreada del original:
+     verde #1D4234 · lima #D1E870 · azul #184ACD · naranja #DE633E
+   La serie de datos se conserva: está validada para daltonismo y cambiarla
+   por color de marca haría ilegibles los gráficos, que es lo contrario de
+   lo que un panel tiene que hacer.
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
   color-scheme: light;
 
+  /* Marca del grupo */
+  --vera-verde:  #1D4234;
+  --vera-lima:   #D1E870;
+  --vera-azul:   #184ACD;
+  --vera-naranja:#DE633E;
+
   /* Superficies */
-  --canvas:      #F4F4F5;
+  --canvas:      #F4F4F1;
   --surface:     #FFFFFF;
   --surface-2:   #FAFAFA;
   --surface-3:   #F1F1F3;
@@ -25,10 +35,10 @@
   --line-soft:   #F0F0F2;
   --ring:        rgba(19, 19, 22, .10);
 
-  /* Acento (pills negros, como en las referencias) */
-  --accent:      #131316;
-  --accent-hov:  #2A2A30;
-  --accent-soft: #F1F1F3;
+  /* Acento: el verde del grupo, no el negro genérico */
+  --accent:      #1D4234;
+  --accent-hov:  #143024;
+  --accent-soft: #E8EEE9;
 
   /* Serie de datos — validada (ΔE CVD 9.1 · contraste vs #fff) */
   --series-1:    #2a78d6;
@@ -917,3 +927,26 @@ table.data td.tight { width: 1%; white-space: nowrap; }
   .sidebar, .topbar-actions, .filters, .btn { display: none !important; }
   .shell { grid-template-columns: 1fr; }
 }
+
+
+/* ── Selector de marca ────────────────────────────────────────────────
+   Es el contexto del panel entero: de qué marca son las cifras que se están
+   mirando. Vive bajo el logotipo porque leerlo y leer el nombre del grupo
+   tiene que ser el mismo gesto. */
+.marcas{padding:10px 12px 4px;border-bottom:1px solid var(--line-soft);margin-bottom:6px}
+.marcas-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);padding:0 8px 7px}
+.marca{display:flex;align-items:center;gap:9px;width:100%;border:0;background:none;
+  padding:8px 9px;border-radius:var(--r-sm);cursor:pointer;font-family:inherit;
+  font-size:13.5px;font-weight:500;color:var(--ink-2);text-align:left;
+  transition:background .12s ease,color .12s ease}
+.marca:hover{background:var(--surface-3);color:var(--ink)}
+.marca.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.marca:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.marca-punto{width:9px;height:9px;border-radius:3px;flex:0 0 auto;background:var(--muted)}
+.marca-punto.m-tnd_dermafol{background:var(--vera-verde)}
+.marca-punto.m-tnd_plasma{background:var(--vera-naranja)}
+.marca-punto.m-todas{background:linear-gradient(135deg,var(--vera-verde) 50%,var(--vera-naranja) 50%)}
+
+/* El logotipo del grupo lleva corchetes: van pegados y no se parten. */
+.brand-name{white-space:nowrap;letter-spacing:-.01em}

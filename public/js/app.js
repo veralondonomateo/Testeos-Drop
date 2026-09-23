@@ -2,13 +2,14 @@
 
 import {
   $, el, clear, api, state, initTheme, toggleTheme, isDark,
-  toast, toastError, initials, num,
+  toast, toastError, initials, num, ponerMarca, cargarMarca,
 } from './core.js';
 import { icon } from './icons.js';
 import { field, readForm } from './ui.js';
 import { routes, NAV } from './routes.js';
 
 initTheme();
+cargarMarca();
 
 const root = $('#root');
 
@@ -70,31 +71,68 @@ function renderLogin(prefillError) {
         el('div', { class: 'brand' },
           el('div', { class: 'brand-mark' }, icon('logo')),
           el('div', { class: 'brand-text' },
-            el('div', { class: 'brand-name', text: 'DropStudio' }),
-            el('div', { class: 'brand-sub', text: 'Panel de testeo' }))),
+            el('div', { class: 'brand-name', text: '[ VERA & CO ]' }),
+            el('div', { class: 'brand-sub', text: 'Un marco común. Marcas con carácter.' }))),
         el('h1', { text: 'Bienvenido de vuelta' }),
-        el('p', { text: 'Entra para revisar tus pedidos, lanzar testeos y medir qué producto vale la pena escalar.' }),
+        el('p', { text: 'Entra para ver cómo van Dermafol y Plasma: pedidos, entregas y qué vale la pena escalar.' }),
         form,
         errBox,
         isLocal
-          ? el('div', { class: 'login-hint', html: 'Acceso de prueba · <code>admin@dropstudio.co</code> / <code>admin123</code>' })
+          ? el('div', { class: 'login-hint', html: 'Acceso de prueba · <code>admin@dropstudio.co</code> / <code>admin123</code>' })  // credencial local, no se cambia con la marca
           : el('div', { class: 'login-hint', id: 'demo-hint', style: { display: 'none' } }))),
 
     el('div', { class: 'login-art' },
       el('div', { class: 'brand' },
         el('div', { class: 'brand-mark', style: { background: 'rgba(255,255,255,.14)', color: 'inherit' } }, icon('logo')),
         el('div', { class: 'brand-text' },
-          el('div', { class: 'brand-name', text: 'DropStudio' }))),
+          el('div', { class: 'brand-name', text: '[ VERA & CO ]' }))),
       el('div', {},
-        el('h2', { text: 'Testea más productos en menos tiempo.' }),
-        el('p', { text: 'Monta una landing, lanza el tráfico, mide el CPA real y decide con datos si escalas o descartas.' }),
+        el('h2', { text: 'Distintas marcas.\nUna fuerza común.' }),
+        el('p', { text: 'Un grupo de marcas independientes con una visión compartida. Aquí se mide cada una por separado y todas juntas.' }),
         el('div', { class: 'feats' },
           [
-            ['rocket', 'De la landing al primer pedido en minutos'],
-            ['target', 'CPA, ROAS y tasa de entrega en vivo'],
-            ['layers', 'Un veredicto por testeo: escalar, iterar o descartar'],
+            ['rocket', 'Dermafol · caída capilar femenina'],
+            ['target', 'Plasma · salud cardiovascular'],
+            ['layers', 'Cada marca con su dominio, sus pedidos y sus cifras'],
           ].map(([ic, txt]) => el('div', { class: 'feat' }, icon(ic), txt)))),
-      el('div', { class: 'foot', text: `© ${new Date().getFullYear()} DropStudio` }))));
+      el('div', { class: 'foot', text: `© ${new Date().getFullYear()} VERA & CO` }))));
+}
+
+/**
+ * El selector de marca.
+ *
+ * Es el contexto del panel entero, no una acción de la vista: por eso vive bajo
+ * el logotipo y no en la barra de acciones, que `setHeader` limpia en cada
+ * cambio de ruta.
+ *
+ * "Todas" existe porque el holding también quiere mirarse entero; es la vista
+ * por defecto la primera vez y lo que se guarda es la elección, no la ausencia.
+ */
+function selectorMarca() {
+  const caja = el('div', { class: 'marcas' });
+
+  const pintar = () => {
+    clear(caja);
+    const opciones = [{ id: null, nombre: 'Todas las marcas' }, ...(state.tiendas || [])];
+    caja.append(el('div', { class: 'marcas-label', text: 'Marca' }));
+    for (const t of opciones) {
+      const activa = (state.marca || null) === (t.id || null);
+      const b = el('button', {
+        class: `marca${activa ? ' on' : ''}`,
+        type: 'button',
+        'aria-pressed': String(activa),
+      },
+        el('span', { class: `marca-punto m-${t.id || 'todas'}` }),
+        el('span', { text: t.nombre }));
+      b.addEventListener('click', () => { if (!activa) ponerMarca(t.id); });
+      caja.append(b);
+    }
+  };
+
+  pintar();
+  window.addEventListener('marca', () => { pintar(); renderRoute(); });
+  window.addEventListener('tiendas', pintar);
+  return caja;
 }
 
 /* ── Layout del panel ────────────────────────────────────────────────── */
@@ -153,8 +191,9 @@ function renderShell() {
     el('a', { class: 'brand', href: '#/dashboard' },
       el('div', { class: 'brand-mark' }, icon('logo')),
       el('div', { class: 'brand-text' },
-        el('div', { class: 'brand-name', text: 'DropStudio' }),
-        el('div', { class: 'brand-sub', text: 'Testeo de productos' }))),
+        el('div', { class: 'brand-name', text: '[ VERA & CO ]' }),
+        el('div', { class: 'brand-sub', text: 'Marcas con carácter' }))),
+    selectorMarca(),
     nav,
     el('div', { class: 'sidebar-foot' }, logoutBtn));
 
@@ -187,6 +226,11 @@ export async function refreshBootstrap() {
   try {
     state.bootstrap = await api.get('/api/bootstrap');
     updateCounts();
+    // Las marcas se piden una vez: son dos filas que cambian una vez al año.
+    if (!state.tiendas?.length) {
+      const r = await api.get('/api/tiendas').catch(() => null);
+      if (r?.tiendas) { state.tiendas = r.tiendas; window.dispatchEvent(new CustomEvent('tiendas')); }
+    }
   } catch (err) {
     if (err?.status === 401) {
       state.user = null;

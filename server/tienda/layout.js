@@ -76,8 +76,10 @@ p{margin:0 0 16px}
   backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--linea)}
 .hd .in{max-width:var(--ancho);margin:0 auto;padding:12px 20px;
   display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px}
-.hd .marca{grid-column:2;justify-self:center;font-size:20px;font-weight:700;
-  letter-spacing:-.03em;text-decoration:none}
+.hd .marca{grid-column:2;justify-self:center;text-decoration:none;display:block}
+/* El logotipo viene sobre fondo blanco, que es el de la cabecera: encaja sin
+   recortar. En el pie, que es crema, se usa el nombre en texto por eso mismo. */
+.hd .marca img{height:26px;width:auto;display:block}
 .hd nav{display:none}
 .hd .der{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
 .icono{display:grid;place-items:center;width:40px;height:40px;border:0;background:none;
@@ -173,7 +175,7 @@ function cabecera(ruta) {
     `<a href="${u}"${ruta === u ? ' aria-current="page"' : ''}>${t}</a>`).join('');
   return `<header class="hd"><div class="in">
   <button class="icono hamb" type="button" data-menu aria-label="Abrir menú" aria-expanded="false">${ICONOS.menu}</button>
-  <a class="marca" href="/">Dermafol</a>
+  <a class="marca" href="/" aria-label="Dermafol · inicio"><img src="/assets/marca/dermafol-logotipo.png" alt="Dermafol" width="118" height="40"></a>
   <nav>${enlaces}</nav>
   <div class="der">
     <a class="icono" href="/cuenta" aria-label="Mi cuenta">${ICONOS.cuenta}</a>
@@ -259,7 +261,9 @@ export function documento({ titulo, descripcion, ruta = '/', cuerpo, extraCss = 
 <title>${titulo}</title>
 <meta name="description" content="${String(descripcion || '').replace(/"/g, '&quot;')}">
 ${noindex ? '<meta name="robots" content="noindex">' : ''}
-<link rel="icon" href="/assets/tienda/isotipo.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/marca/dermafol-icono-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/marca/dermafol-icono-192.png">
+<link rel="apple-touch-icon" href="/assets/marca/dermafol-icono-180.png">
 ${FUENTE}
 <style>${TOKENS}${extraCss}</style>
 </head>

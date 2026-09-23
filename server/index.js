@@ -251,6 +251,7 @@ router.get('/api/analytics', async ({ ctx, query }) => {
   return Analytics.overview(query.range || '30d', {
     product_id: query.product_id || null,
     test_id: query.test_id || null,
+    tienda_id: query.tienda_id || null,
   });
 });
 
@@ -408,6 +409,10 @@ export async function handler(req, res) {
       const tienda = await Tiendas.tiendaDeHost(req.headers.host);
       if (tienda && tienda.id === 'tnd_dermafol') {
         const pagina = Vitrina.resolver(pathname);
+        if (pagina && pagina.redir) {
+          res.writeHead(301, { location: pagina.redir, 'cache-control': 'public, max-age=0, s-maxage=600' });
+          return res.end();
+        }
         if (pagina) {
           return html(res, pagina, 200,
             { 'cache-control': 'public, max-age=0, s-maxage=120, stale-while-revalidate=900' });

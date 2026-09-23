@@ -19,6 +19,7 @@ async function orderStats(from, to, filters = {}) {
   const where = ['o.created_at >= ?', 'o.created_at <= ?'];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('o.product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('o.product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   if (filters.test_id) { where.push('o.test_id = ?'); params.push(filters.test_id); }
   const w = where.join(' AND ');
   const [total, del] = await Promise.all([
@@ -32,6 +33,7 @@ async function eventCount(type, from, to, filters = {}) {
   const where = ['type = ?', 'created_at >= ?', 'created_at <= ?'];
   const params = [type, iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   if (filters.test_id) { where.push('test_id = ?'); params.push(filters.test_id); }
   const r = await one(`SELECT COUNT(DISTINCT session_id) n FROM events WHERE ${where.join(' AND ')}`, params);
   return r.n;
@@ -41,6 +43,7 @@ function spendTotal(from, to, filters = {}) {
   const where = ['date >= ?', 'date <= ?'];
   const params = [dayKey(from), dayKey(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   if (filters.test_id) { where.push('test_id = ?'); params.push(filters.test_id); }
   return one(`SELECT COALESCE(SUM(spend),0) spend, COALESCE(SUM(clicks),0) clicks,
               COALESCE(SUM(impressions),0) impressions FROM ad_spend WHERE ${where.join(' AND ')}`, params);
@@ -131,6 +134,7 @@ export async function dailySeries(days, filters = {}) {
   const fp = [];
   const fw = [];
   if (filters.product_id) { fw.push('product_id = ?'); fp.push(filters.product_id); }
+  if (filters.tienda_id) { fw.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); fp.push(filters.tienda_id); }
   if (filters.test_id) { fw.push('test_id = ?'); fp.push(filters.test_id); }
   const extra = fw.length ? ' AND ' + fw.join(' AND ') : '';
 
@@ -175,6 +179,7 @@ function statusBreakdown(from, to, filters) {
   const where = ['created_at >= ?', 'created_at <= ?'];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   if (filters.test_id) { where.push('test_id = ?'); params.push(filters.test_id); }
   return all(`SELECT status, COUNT(*) n, COALESCE(SUM(total),0) total FROM orders
               WHERE ${where.join(' AND ')} GROUP BY status`, params);
@@ -205,6 +210,7 @@ function byCity(from, to, filters) {
   const where = ['created_at >= ?', 'created_at <= ?', "status != 'cancelled'", "city != ''"];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   return all(`SELECT city, COUNT(*) n, COALESCE(SUM(total),0) total FROM orders
               WHERE ${where.join(' AND ')} GROUP BY city ORDER BY n DESC LIMIT 10`, params);
 }
@@ -213,6 +219,7 @@ function bySource(from, to, filters) {
   const where = ['created_at >= ?', 'created_at <= ?', "status != 'cancelled'"];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   return all(`SELECT CASE WHEN utm_source = '' THEN 'directo' ELSE utm_source END source,
                      COUNT(*) n, COALESCE(SUM(total),0) total
               FROM orders WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY n DESC LIMIT 8`, params);
@@ -222,6 +229,7 @@ function byDevice(from, to, filters) {
   const where = ["type = 'pageview'", 'created_at >= ?', 'created_at <= ?'];
   const params = [iso(from), iso(to)];
   if (filters.product_id) { where.push('product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
   return all(`SELECT CASE WHEN device = '' THEN 'desconocido' ELSE device END device,
                      COUNT(DISTINCT session_id) n
               FROM events WHERE ${where.join(' AND ')} GROUP BY 1 ORDER BY n DESC`, params);

@@ -133,8 +133,20 @@ const qs = (params = {}) => {
   return clean.length ? `?${new URLSearchParams(Object.fromEntries(clean))}` : '';
 };
 
+/**
+ * Las rutas que NO se filtran por marca.
+ *
+ * Todo lo demás sí: la marca es la lente por la que se mira el panel, y que
+ * cada vista tenga que acordarse de pasarla es garantía de que alguna no lo
+ * haga y enseñe cifras de las dos marcas mezcladas sin avisar.
+ */
+const SIN_MARCA = ['/api/auth', '/api/settings', '/api/tiendas', '/api/bootstrap'];
+
 export const api = {
-  get:    (path, params) => request('GET', path + qs(params)),
+  get: (path, params) => {
+    const global = SIN_MARCA.some((r) => path.startsWith(r)) ? {} : marcaActiva();
+    return request('GET', path + qs({ ...global, ...(params || {}) }));
+  },
   post:   (path, body) => request('POST', path, body ?? {}),
   patch:  (path, body) => request('PATCH', path, body ?? {}),
   put:    (path, body) => request('PUT', path, body ?? {}),
@@ -148,7 +160,36 @@ export const state = {
   user: null,
   bootstrap: null,
   route: { name: 'dashboard', params: {} },
+  /** La marca que se está mirando. null = todas. */
+  marca: null,
+  tiendas: [],
 };
+
+const MARCA_KEY = 'vera_marca';
+
+/** El filtro que se añade a cada llamada, o nada si se miran todas. */
+function marcaActiva() {
+  return state.marca ? { tienda_id: state.marca } : {};
+}
+
+/** Recupera la marca elegida la última vez. */
+export function cargarMarca() {
+  try { state.marca = localStorage.getItem(MARCA_KEY) || null; } catch (e) { state.marca = null; }
+  return state.marca;
+}
+
+/**
+ * Cambia la marca y recarga la vista.
+ *
+ * Se recarga entera en vez de refrescar por partes: media docena de vistas
+ * guardan datos en su propio estado, y refrescar sólo lo visible dejaría cifras
+ * de la marca anterior en las que no se están mirando.
+ */
+export function ponerMarca(id) {
+  state.marca = id || null;
+  try { if (id) localStorage.setItem(MARCA_KEY, id); else localStorage.removeItem(MARCA_KEY); } catch (e) {}
+  window.dispatchEvent(new CustomEvent('marca'));
+}
 
 export const orderStatus = (key) => state.bootstrap?.order_status?.[key] ?? { label: key, tone: 'neutral', step: 0 };
 export const testStatus = (key) => state.bootstrap?.test_status?.[key] ?? { label: key, tone: 'neutral' };

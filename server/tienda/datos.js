@@ -28,6 +28,10 @@ export const EMPRESA = {
 export const PRODUCTOS = [
   {
     slug: 'combo-dermafol-360',
+    // El kit no tiene ficha propia en la tienda: su página es la landing que
+    // lleva meses convirtiendo. Duplicarla sería competir contra el dato que ya
+    // tenemos, y la copia nueva empezaría de cero.
+    enlace: '/p/dermafol-360-v2',
     nombre: 'Combo Dermafol 360°',
     tagline: 'El protocolo completo: por dentro y por fuera',
     precio: 139900,
@@ -138,15 +142,15 @@ export const GUIAS = [
   { slug: 'por-que-se-cae-el-cabello-despues-de-los-30',
     titulo: 'Por qué se cae el cabello después de los 30',
     resumen: 'La DHT, el cortisol y los déficits que nadie revisa. Las tres causas de la caída femenina y por qué el shampoo no llega a ninguna.',
-    imagen: '/assets/listicle/01-peine.jpg', minutos: 6, cuerpo: PENDIENTE },
+    imagen: '/assets/tienda/suplemento-abierto.jpg', minutos: 6, cuerpo: PENDIENTE },
   { slug: 'como-leer-tu-linea-de-particion',
     titulo: 'Cómo leer tu línea de partición',
     resumen: 'Qué mirar, cada cuánto fotografiarla y qué cambios son normales entre una semana y otra.',
-    imagen: '/assets/listicle/02-conversacion.jpg', minutos: 4, cuerpo: PENDIENTE },
+    imagen: '/assets/tienda/mujer-producto.jpg', minutos: 4, cuerpo: PENDIENTE },
   { slug: 'las-12-semanas-del-ciclo-capilar',
     titulo: 'Las 12 semanas del ciclo capilar',
     resumen: 'Qué esperar en cada etapa del tratamiento y por qué abandonar al mes es abandonar en el primer tercio.',
-    imagen: '/assets/listicle/05-profundidad.jpg', minutos: 5, cuerpo: PENDIENTE },
+    imagen: '/assets/tienda/antes-despues.jpg', minutos: 5, cuerpo: PENDIENTE },
 ];
 
 export const guiaPorSlug = (s) => GUIAS.find((g) => g.slug === s) || null;

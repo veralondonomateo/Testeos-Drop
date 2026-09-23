@@ -12,6 +12,7 @@ export async function listProducts(query = {}) {
   const where = [];
   const params = [];
   if (query.status) { where.push('status = ?'); params.push(query.status); }
+  if (query.tienda_id) { where.push('tienda_id = ?'); params.push(query.tienda_id); }
   if (query.q) {
     where.push('(name ILIKE ? OR slug ILIKE ? OR category ILIKE ?)');
     params.push(`%${query.q}%`, `%${query.q}%`, `%${query.q}%`);

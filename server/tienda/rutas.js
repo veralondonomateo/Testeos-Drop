@@ -7,6 +7,7 @@
  */
 
 import * as P from './paginas.js';
+import { productoPorSlug } from './datos.js';
 
 /**
  * Devuelve el HTML de la ruta, o null si no es de la tienda.
@@ -32,7 +33,14 @@ export function resolver(pathname) {
   if (p === '/checkout') return P.checkout();
 
   const prod = p.match(/^\/producto\/([a-z0-9-]+)$/);
-  if (prod) return P.producto(prod[1]) || P.noEncontrada();
+  if (prod) {
+    // El kit vive en su landing. Redirigir en vez de dar 404 mantiene vivo
+    // cualquier enlace que ya apunte aquí, que los hay en el propio catálogo
+    // hasta que se propague el caché.
+    const q = productoPorSlug(prod[1]);
+    if (q?.enlace) return { redir: q.enlace };
+    return P.producto(prod[1]) || P.noEncontrada();
+  }
 
   const guia = p.match(/^\/guias\/([a-z0-9-]+)$/);
   if (guia) return P.guia(guia[1]) || P.noEncontrada();

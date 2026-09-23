@@ -594,7 +594,7 @@ export async function settingsView({ host }) {
       ['Base de datos', 'SQLite local · data/drop.db'],
       ['Moneda', 'COP (pesos colombianos)'],
       ['Zona horaria', store.timezone || 'America/Bogota'],
-      ['Versión', 'DropStudio 1.0'],
+      ['Versión', 'VERA & CO · Panel 1.0'],
     ]),
   }));
 }
