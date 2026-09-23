@@ -400,6 +400,11 @@ export async function handler(req, res) {
         }
         return html(res, tiendaSinPortada(tienda), 200, { 'cache-control': 'no-store' });
       }
+      // Sin tienda en este host, "/" es el panel. En Vercel la raíz ahora pasa
+      // por la función —hace falta para que un dominio de marca no reciba el
+      // panel desde el CDN— así que hay que servirlo aquí explícitamente en vez
+      // de confiar en que el estático llegue antes.
+      if (serveStatic(res, PUBLIC_DIR, 'index.html')) return;
     }
 
     const match = router.match(req.method, pathname);
