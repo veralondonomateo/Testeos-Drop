@@ -377,6 +377,16 @@ CREATE TABLE IF NOT EXISTS order_events (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tiendas (
+  id           TEXT PRIMARY KEY,
+  nombre       TEXT NOT NULL,
+  dominio      TEXT UNIQUE NOT NULL,
+  home_page_id TEXT,
+  status       TEXT NOT NULL DEFAULT 'activa',
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id           TEXT PRIMARY KEY,
   type         TEXT NOT NULL,
@@ -424,11 +434,19 @@ CREATE INDEX IF NOT EXISTS idx_orders_page    ON orders(page_id);
 -- gasto. Los eventos anteriores al 1-sep-2026 lo tienen vacío.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS utm_content TEXT DEFAULT '';
 
+-- A qué marca pertenece cada página. Nullable a propósito: una página sin
+-- tienda se sirve desde cualquier dominio, que es como se comportaba todo antes
+-- y es lo que mantiene vivos el panel y los enlaces de testeo que ya circulan
+-- mientras las marcas se migran una a una.
+ALTER TABLE pages ADD COLUMN IF NOT EXISTS tienda_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_page    ON events(page_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_content ON events(utm_content);
+CREATE INDEX IF NOT EXISTS idx_pages_tienda    ON pages(tienda_id);
+CREATE INDEX IF NOT EXISTS idx_tiendas_dominio ON tiendas(lower(dominio));
 CREATE INDEX IF NOT EXISTS idx_spend_date     ON ad_spend(date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user  ON sessions(user_id);
 `);

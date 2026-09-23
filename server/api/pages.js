@@ -244,7 +244,7 @@ export const forgetPages = () => pageCache().clear();
  * Devuelve el HTML público de la landing con el runtime de tracking inyectado
  * justo antes de `</body>`.
  */
-export async function renderPublicPage(slug, { preview = false } = {}) {
+export async function renderPublicPage(slug, { preview = false, tienda = null } = {}) {
   // El preview nunca se cachea: lleva el píxel desactivado y sirve borradores,
   // así que compartir su HTML con el tráfico real sería justo lo contrario.
   if (preview) {
@@ -260,6 +260,16 @@ export async function renderPublicPage(slug, { preview = false } = {}) {
     p = await one('SELECT * FROM pages WHERE slug = ?', [slug]);
     remember(key, p && p.status === 'published' ? p : false);
   }
+  // En un dominio de marca sólo se sirven las páginas de esa marca, y una
+  // página sin tienda asignada tampoco: dermafol.co/p/plasma-corazon tiene que
+  // dar 404, no la landing de otro producto bajo la marca equivocada. El error
+  // lo vería la clienta antes que nosotros, porque el dominio está en la barra
+  // del navegador.
+  //
+  // Se deniega por defecto en vez de permitir lo no asignado. Una página que
+  // aparece donde no debe es un problema de marca; una que falta se nota al
+  // primer clic y se arregla asignándola.
+  if (p && tienda && p.tienda_id !== tienda.id) return null;
   return p ? renderPage(p) : null;
 }
 

@@ -15,6 +15,7 @@ import * as Analytics from './api/analytics.js';
 import * as Track from './api/track.js';
 import * as Despacho from './api/despacho.js';
 import * as Inversion from './api/inversion.js';
+import * as Tiendas from './api/tiendas.js';
 import { purgeDemoData, hasDemoData } from './seed.js';
 
 const router = new Router();
@@ -178,6 +179,15 @@ router.get('/api/inversion', async ({ ctx, query }) => (
   auth(ctx), { dias: await Inversion.resumenInversion(Number(query.dias) || 7) }
 ));
 
+/* ── Tiendas ──────────────────────────────────────────────────────────── */
+
+router.get('/api/tiendas', async ({ ctx }) => (auth(ctx), { tiendas: await Tiendas.listarTiendas() }));
+router.post('/api/tiendas', async ({ ctx, body }) => (auth(ctx), Tiendas.crearTienda(body)));
+router.patch('/api/tiendas/:id', async ({ ctx, params, body }) => (auth(ctx), Tiendas.actualizarTienda(params.id, body)));
+router.post('/api/tiendas/:id/paginas', async ({ ctx, params, body }) => (
+  auth(ctx), { paginas: await Tiendas.asignarPaginas(params.id, body.slugs || []) }
+));
+
 router.get('/api/orders-export.csv', async ({ ctx, query, res }) => {
   auth(ctx);
   const csv = await Orders.ordersCSV(query);
@@ -261,9 +271,10 @@ router.post('/api/track/order', ({ body, req }) => Track.trackOrder(body, req));
 
 /* ── Landing pública + preview ────────────────────────────────────────── */
 
-router.get('/p/:slug', async ({ params, query, res, ctx }) => {
+router.get('/p/:slug', async ({ params, query, req, res, ctx }) => {
   const preview = query.preview === '1' && !!ctx.user;
-  const page = await Pages.renderPublicPage(params.slug, { preview });
+  const tienda = await Tiendas.tiendaDeHost(req.headers.host);
+  const page = await Pages.renderPublicPage(params.slug, { preview, tienda });
   if (!page) return html(res, notFoundPage(params.slug), 404);
 
   // Una landing publicada es idéntica para todo el mundo — lo que cambia por
@@ -296,12 +307,38 @@ router.get('/t/:code', async ({ params, req, res }) => {
   const pick = await Pages.pickVariant(params.code, parseCookies(req)[key] || null);
   if (!pick) return html(res, splitNotFoundPage(params.code), 404);
 
+  // El enlace de un testeo de otra marca no se sirve desde este dominio.
+  const tienda = await Tiendas.tiendaDeHost(req.headers.host);
+  if (tienda && pick.page.tienda_id !== tienda.id) {
+    return html(res, splitNotFoundPage(params.code), 404);
+  }
+
   const page = await Pages.renderPage(pick.page);
   // La cookie sólo se escribe al asignar por primera vez: reescribirla en cada
   // visita renovaría los 30 días y un visitante muy recurrente nunca saldría
   // del testeo.
   html(res, page, 200, pick.fresh ? { 'set-cookie': cookie(key, pick.page.variant, { days: 30 }) } : {});
 });
+
+/**
+ * Lo que se ve en la raíz de una marca que todavía no tiene portada.
+ *
+ * Existe para que apuntar el DNS no dependa de tener la tienda terminada: se
+ * mueve el dominio cuando convenga y esta página sostiene la raíz mientras
+ * tanto, sin romper las landings, que son las que están vendiendo.
+ */
+function tiendaSinPortada(tienda) {
+  const nombre = String(tienda.nombre || '').replace(/[<>&]/g, '');
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${nombre}</title>
+<meta name="robots" content="noindex">
+<style>body{font-family:system-ui,sans-serif;background:#faf8f7;color:#2e2e2e;display:grid;
+place-items:center;min-height:100vh;margin:0;padding:32px;text-align:center}
+.b{max-width:380px}h1{font-size:23px;margin:0 0 10px;letter-spacing:-.02em}
+p{color:#6d6d6d;line-height:1.6;font-size:15px}</style></head>
+<body><div class="b"><h1>${nombre}</h1>
+<p>Estamos terminando la tienda. Vuelve en unos días.</p></div></body></html>`;
+}
 
 function notFoundPage(slug) {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
@@ -346,6 +383,24 @@ export async function handler(req, res) {
     const cookies = parseCookies(req);
     const token = cookies[Auth.COOKIE_NAME];
     const ctx = { token, user: await Auth.userFromToken(token) };
+
+    // La raíz de un dominio de marca sirve su tienda, no el panel.
+    //
+    // Va antes del enrutador y no como una ruta más porque "/" tiene dos
+    // significados según el host: en el dominio de Vercel es el panel, y en
+    // dermafol.co es la tienda. Resolverlo aquí deja el enrutador con una sola
+    // responsabilidad y no obliga a que cada ruta sepa de dominios.
+    if (req.method === 'GET' && pathname === '/') {
+      const tienda = await Tiendas.tiendaDeHost(req.headers.host);
+      if (tienda) {
+        const portada = await Tiendas.portadaDe(tienda);
+        if (portada) {
+          return html(res, portada, 200,
+            { 'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=600' });
+        }
+        return html(res, tiendaSinPortada(tienda), 200, { 'cache-control': 'no-store' });
+      }
+    }
 
     const match = router.match(req.method, pathname);
     if (match) {
