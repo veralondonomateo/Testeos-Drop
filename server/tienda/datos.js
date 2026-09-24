@@ -137,7 +137,21 @@ export const TESTIMONIOS = [
 ];
 
 /** Guías: la estructura está lista; los textos los escribe la marca. */
+/**
+ * Las guías del blog.
+ *
+ * Una guía con `enlace` no se redacta aquí: ya existe como página publicada y
+ * la tarjeta lleva directamente a ella. Es el caso del listicle, que está
+ * escrito, maquetado y con sus fotos — repetirlo como borrador en esta lista
+ * sería tener el mismo artículo dos veces, uno de ellos peor.
+ */
 export const GUIAS = [
+  { slug: 'siete-razones-caida-despues-de-los-35',
+    titulo: '7 razones por las que la caída no se detiene después de los 35',
+    resumen: 'Por qué el shampoo no llega a la causa, qué es la DHT y por qué doce semanas '
+      + 'no son lo mismo que cuatro. Con testimonios de clientas reales.',
+    imagen: '/assets/listicle/hero-espejo.jpg', minutos: 4,
+    enlace: '/p/dermafol-listicle', destacada: true },
   { slug: 'por-que-se-cae-el-cabello-despues-de-los-30',
     titulo: 'Por qué se cae el cabello después de los 30',
     resumen: 'La DHT, el cortisol y los déficits que nadie revisa. Las tres causas de la caída femenina y por qué el shampoo no llega a ninguna.',
@@ -149,7 +163,9 @@ export const GUIAS = [
   { slug: 'las-12-semanas-del-ciclo-capilar',
     titulo: 'Las 12 semanas del ciclo capilar',
     resumen: 'Qué esperar en cada etapa del tratamiento y por qué abandonar al mes es abandonar en el primer tercio.',
-    imagen: '/assets/tienda/antes-despues.jpg', minutos: 5, cuerpo: PENDIENTE },
+    // El recorte limpio, sin el titular de la creatividad: al llevarla a 7:5 la
+    // frase quedaba partida a la mitad dentro de la tarjeta.
+    imagen: '/assets/tienda/antes-despues-limpio.jpg', minutos: 5, cuerpo: PENDIENTE },
 ];
 
 export const guiaPorSlug = (s) => GUIAS.find((g) => g.slug === s) || null;

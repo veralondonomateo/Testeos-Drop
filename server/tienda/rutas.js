@@ -7,7 +7,7 @@
  */
 
 import * as P from './paginas.js';
-import { productoPorSlug } from './datos.js';
+import { productoPorSlug, guiaPorSlug } from './datos.js';
 
 /**
  * Devuelve el HTML de la ruta, o null si no es de la tienda.
@@ -43,7 +43,13 @@ export function resolver(pathname) {
   }
 
   const guia = p.match(/^\/guias\/([a-z0-9-]+)$/);
-  if (guia) return P.guia(guia[1]) || P.noEncontrada();
+  if (guia) {
+    // Igual que el kit: una guía que ya vive como página publicada se redirige
+    // en vez de pintar un borrador vacío con el mismo título.
+    const g = guiaPorSlug(guia[1]);
+    if (g?.enlace) return { redir: g.enlace };
+    return P.guia(guia[1]) || P.noEncontrada();
+  }
 
   const pol = p.match(/^\/politicas\/([a-z0-9-]+)$/);
   if (pol) return P.politica(pol[1]) || P.noEncontrada();

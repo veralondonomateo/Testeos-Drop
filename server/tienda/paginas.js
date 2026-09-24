@@ -144,6 +144,30 @@ const CSS = `
   .cta-pc{display:block;margin-top:22px}
   .cta-mov{display:none}
 }
+/* ── Guías ────────────────────────────────────────────────────────────
+   La guía que ya está escrita se lleva una banda entera: foto a un lado,
+   texto al otro, y en móvil una encima de la otra sin recortar nada. */
+.etiqueta{display:inline-block;background:var(--crema);border:1px solid var(--linea);
+  border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--tinta-suave);
+  margin:0 0 10px}
+.guia-grande{display:grid;grid-template-columns:1fr;gap:0;text-decoration:none;
+  background:#fff;border:1px solid var(--linea);border-radius:var(--radio);
+  overflow:hidden;color:inherit}
+.guia-grande .im img{width:100%;height:auto;display:block;aspect-ratio:7/5;object-fit:cover}
+.guia-grande .tx{padding:22px 20px 24px}
+.guia-grande h2{font-size:clamp(21px,4.6vw,27px);line-height:1.2;margin:0 0 10px}
+.guia-grande p{font-size:15px;color:var(--tinta-suave);margin:0}
+.guia-grande .meta{display:block;margin-top:14px;font-size:13px;font-weight:600;color:var(--tinta)}
+@media(min-width:900px){
+  /* Dos columnas de igual peso: la foto no se estira para rellenar, se recorta
+     por el centro, que es donde está la clienta. */
+  .guia-grande{grid-template-columns:1.05fr 1fr;align-items:stretch}
+  .guia-grande .im img{height:100%;aspect-ratio:auto;min-height:320px;object-position:center}
+  .guia-grande .tx{padding:clamp(28px,3vw,44px);align-self:center}
+  .guia-grande h2{font-size:clamp(25px,2.3vw,32px)}
+}
+
 /* ── Rejilla y carrusel de producto ──────────────────────────────────
    En móvil los productos van en riel horizontal: apilados hacia abajo
    obligaban a recorrer toda la página para ver tres cosas, y el tercero no
@@ -573,13 +597,33 @@ export function nosotros() {
 }
 
 export function guias() {
+  // Lo que ya está escrito va arriba y en grande; los borradores, debajo en la
+  // rejilla. Mezclarlos al mismo tamaño hacía que el único artículo terminado
+  // pareciera uno más de una lista de títulos sin cuerpo.
+  const destacadas = GUIAS.filter((g) => g.destacada);
+  const resto = GUIAS.filter((g) => !g.destacada);
+
+  const tarjeta = (g) => `<a class="card guia" href="${g.enlace || `/guias/${g.slug}`}" style="text-decoration:none">
+  <img src="${g.imagen}" alt="" width="700" height="500" loading="lazy" style="aspect-ratio:7/5;object-fit:cover">
+  <div style="padding:17px">
+    ${g.enlace ? '<span class="etiqueta">Artículo completo</span>' : ''}
+    <h3 style="font-size:17px">${esc(g.titulo)}</h3>
+    <p style="font-size:14px;color:var(--tinta-suave);margin:8px 0 0">${esc(g.resumen)}</p>
+    <span style="font-size:12px;color:var(--tinta-tenue);display:block;margin-top:10px">${g.minutos} min de lectura</span></div></a>`;
+
+  const grande = (g) => `<a class="guia-grande" href="${g.enlace || `/guias/${g.slug}`}">
+  <div class="im"><img src="${g.imagen}" alt="" width="1100" height="800" fetchpriority="high"></div>
+  <div class="tx">
+    <span class="etiqueta">Artículo completo</span>
+    <h2>${esc(g.titulo)}</h2>
+    <p>${esc(g.resumen)}</p>
+    <span class="meta">${g.minutos} min de lectura · Leer el artículo →</span>
+  </div></a>`;
+
   const cuerpo = `${encabezado('Guías', 'Entender la caída es el primer paso',
     'Contenido educativo sobre caída capilar femenina. Sin promesas y con las fuentes a la vista cuando las hay.')}
-<section class="sec"><div class="w"><div class="g3">${GUIAS.map((g) => `<a class="card" href="/guias/${g.slug}" style="text-decoration:none">
-  <img src="${g.imagen}" alt="" width="700" height="500" loading="lazy" style="aspect-ratio:7/5;object-fit:cover">
-  <div style="padding:17px"><h3 style="font-size:17px">${esc(g.titulo)}</h3>
-    <p style="font-size:14px;color:var(--tinta-suave);margin:8px 0 0">${esc(g.resumen)}</p>
-    <span style="font-size:12px;color:var(--tinta-tenue);display:block;margin-top:10px">${g.minutos} min de lectura</span></div></a>`).join('')}</div></div></section>`;
+${destacadas.length ? `<section class="sec" style="padding-bottom:0"><div class="w">${destacadas.map(grande).join('')}</div></section>` : ''}
+${resto.length ? `<section class="sec"><div class="w"><div class="g3">${resto.map(tarjeta).join('')}</div></div></section>` : ''}`;
   return documento({ titulo: 'Guías · Dermafol',
     descripcion: 'Guías sobre caída capilar femenina: causas hormonales, ciclo del folículo y qué esperar de un tratamiento.',
     ruta: '/guias', cuerpo, extraCss: CSS });
