@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    VERA & CO · sistema de diseño del panel
-   Tipografía: Questrial (display) + Poppins (interfaz)
+   Tipografía: Instrument Sans, la del manual (licencia OFL)
    Paleta de la identidad del grupo, muestreada del original:
      verde #1D4234 · lima #D1E870 · azul #184ACD · naranja #DE633E
    La serie de datos se conserva: está validada para daltonismo y cambiarla
@@ -11,18 +11,25 @@
 :root {
   color-scheme: light;
 
-  /* Marca del grupo */
-  --vera-verde:  #1D4234;
-  --vera-lima:   #D1E870;
-  --vera-azul:   #184ACD;
-  --vera-naranja:#DE633E;
+  /* Paleta del grupo, con los nombres del manual.
+     No están escogidos a ojo: se derivaron de los ratios de contraste que el
+     propio manual publica (página 12), y los reproducen con menos de 0,03 de
+     desviación. Cambiar uno sin rehacer esa cuenta rompe la accesibilidad que
+     la marca ya se comprometió a cumplir.
+       paper/forest 12,08 · forest/jade 8,43 · paper/signal 4,66 · ink/mineral 14,41 */
+  --paper:       #FFFFFF;
+  --mineral:     #F7F7F5;
+  --jade:        #C7DCD1;
+  --forest:      #1B3C30;
+  --signal:      #CA4923;
+  --vera-ink:    #1C2721;
 
   /* Superficies — el manual es un sistema blanco y aireado; el verde es
      acento, no relleno. Por eso el lienzo casi no se separa del papel. */
   --canvas:      #FCFCFB;
-  --surface:     #FFFFFF;
-  --surface-2:   #FAFAF9;
-  --surface-3:   #F4F4F2;
+  --surface:     var(--paper);
+  --surface-2:   #FBFBF9;
+  --surface-3:   var(--mineral);
   --overlay:     rgba(18, 18, 22, .48);
 
   /* Tinta */
@@ -37,9 +44,9 @@
   --ring:        rgba(19, 19, 22, .10);
 
   /* Acento: el verde del grupo, no el negro genérico */
-  --accent:      #1D4234;
+  --accent:      var(--forest);
   --accent-hov:  #143024;
-  --accent-soft: #E8EEE9;
+  --accent-soft: #EDF3EF;
 
   /* Serie de datos — validada (ΔE CVD 9.1 · contraste vs #fff) */
   --series-1:    #2a78d6;
@@ -74,8 +81,9 @@
   --sidebar: 250px;
   --topbar: 68px;
 
-  --font-ui: 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Questrial', 'Poppins', system-ui, sans-serif;
+  /* Instrument Sans es la tipografía del manual (licencia OFL). */
+  --font-ui: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Instrument Sans', system-ui, sans-serif;
 }
 
 :root[data-theme="dark"] {
@@ -101,8 +109,8 @@
   --ring:        rgba(209, 232, 112, .18);
 
   /* Lima sobre verde: el par de la identidad. */
-  --accent:      #D1E870;
-  --accent-hov:  #DCEF8E;
+  --accent:      var(--jade);
+  --accent-hov:  #D9E9E0;
   --accent-soft: #1E2D26;
 
   --series-1:    #3987e5;

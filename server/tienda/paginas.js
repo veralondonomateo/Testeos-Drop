@@ -82,6 +82,13 @@ const CSS = `
 .nota{font-size:12.5px;color:var(--tinta-tenue);margin:18px 0 0}
 /* Muro de fotos reales. Doce y no veinte: con más, la página pesa de más y
    nadie las mira todas; con menos, no se lee como un muro. */
+/* Las dos vías del protocolo, una al lado de la otra: el argumento entero de
+   la marca es que hacen falta las dos, y verlas separadas lo dice sin texto. */
+.dos{display:grid;gap:16px}
+.dos>div{border-left:2px solid var(--arcilla);padding-left:15px}
+.dos b{display:block;font-size:15px;margin-bottom:4px}
+.dos p{font-size:14.5px;color:var(--tinta-suave);margin:0;line-height:1.6}
+@media(min-width:560px){ .dos{grid-template-columns:1fr 1fr;gap:22px} }
 .muro{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:24px 0 0}
 .muro img{aspect-ratio:1/1;object-fit:cover;border-radius:10px;background:var(--crema);width:100%}
 @media(min-width:720px){ .muro{grid-template-columns:repeat(6,1fr);gap:9px} }
@@ -104,14 +111,14 @@ const CSS = `
 
 /* rejilla de producto */
 .prod{display:flex;flex-direction:column}
-/* Encaje completo y no recorte: son fotos de producto, y recortarlas al
-   cuadrado corta frascos por la mitad. El fondo suave hace de passe-partout
-   para que las tres portadas se vean de la misma familia aunque vengan de
-   sesiones distintas. */
-.prod .foto{display:block;background:var(--crema);padding:14px}
-.prod .foto img{aspect-ratio:1/1;object-fit:contain;width:100%;
-  mix-blend-mode:multiply;transition:transform .25s ease}
-.prod:hover .foto img{transform:scale(1.03)}
+/* Las tres fotos son cuadradas y ya traen su propio fondo de estudio, así que
+   llenan la baldosa de borde a borde. Antes iban sobre un marco crema con
+   relleno: eso anidaba dos fondos —el mío y el de la foto— y el resultado era
+   un recuadro sucio alrededor de cada producto. */
+.prod .foto{display:block;overflow:hidden;background:var(--crema)}
+.prod .foto img{aspect-ratio:1/1;object-fit:cover;width:100%;
+  transition:transform .4s ease}
+.prod:hover .foto img{transform:scale(1.04)}
 .prod .cuerpo{padding:16px;display:flex;flex-direction:column;gap:7px;flex:1}
 .prod h3{font-size:16.5px}
 .prod h3 a{text-decoration:none}
@@ -148,12 +155,12 @@ const CSS = `
 .ficha{display:grid;grid-template-columns:1fr;gap:26px;margin-top:18px}
 .ficha .gal{display:grid;gap:9px}
 .ficha .gal .pri{border-radius:var(--radio);overflow:hidden;background:var(--crema)}
-.ficha .gal .pri img{aspect-ratio:1/1;object-fit:contain;width:100%;padding:20px;mix-blend-mode:multiply}
+.ficha .gal .pri img{aspect-ratio:1/1;object-fit:cover;width:100%}
 .ficha .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
 .ficha .mini button{padding:0;border:1.5px solid var(--linea);border-radius:var(--radio-s);
   overflow:hidden;background:var(--crema);cursor:pointer}
 .ficha .mini button[aria-current]{border-color:var(--tinta)}
-.ficha .mini img{aspect-ratio:1/1;object-fit:contain;padding:6px;mix-blend-mode:multiply}
+.ficha .mini img{aspect-ratio:1/1;object-fit:cover}
 .ficha .precio{display:flex;align-items:baseline;gap:11px;margin:14px 0}
 .ficha .precio b{font-size:30px;letter-spacing:-.03em}
 .ficha .precio s{color:var(--tinta-tenue)}
@@ -225,7 +232,7 @@ export function home() {
       <div class="rate"><span style="color:#E8A13A;letter-spacing:2px">★★★★★</span>
         <span><b>4.67</b> · +800 clientas en Colombia</span></div>
       <h1>Tu cabello no se cae por tu edad. Son tus hormonas.</h1>
-      <p class="lede">Trata la causa desde adentro y reactiva el folículo desde afuera. Las dos cosas a la vez, que es lo que ningún producto suelto hace.</p>
+      <p class="lede">El suplemento regula la causa hormonal. El Roll-On reactiva el folículo. Ninguno resuelve la caída por separado, y por eso el kit trae los dos.</p>
       <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">Registro INVIMA</span></div>
       <a class="btn" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
       <div class="bajo"><span>✓ Envío gratis a todo el país</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
@@ -238,24 +245,24 @@ ${franja()}
 
 <section class="sec"><div class="w">
   <p class="eyebrow">Por dónde empezar</p>
-  <h2>El suplemento trata la causa. El Roll-On reactiva el folículo.</h2>
-  <p class="lede" style="max-width:600px;margin-top:10px">El Combo hace las dos cosas. Si no sabes por dónde empezar, ese es el que recomendamos.</p>
+  <h2>Tres formas de empezar</h2>
+  <p class="lede" style="max-width:580px;margin-top:10px">Si no sabes cuál, empieza por el Combo: trae el suplemento y el Roll-On, que es el protocolo completo.</p>
   <div class="g3" style="margin-top:26px">${PRODUCTOS.map(tarjetaProducto).join('')}</div>
 </div></section>
 
 <section class="sec crema"><div class="w">
-  <p class="eyebrow">Resultados reales</p>
-  <h2>¿Por qué Dermafol funciona cuando lo demás no?</h2>
-  <div class="g2" style="margin-top:26px;align-items:center">
-    <img src="/assets/tienda/antes-despues.jpg" alt="Antes y después de una clienta tras diez semanas" style="border-radius:var(--radio)" width="1000" height="1000" loading="lazy">
-    <div><ul class="lista">
-      <li>Trata la causa hormonal, no solo el síntoma</li>
-      <li>Reactiva el folículo dormido con Minoxidil 2%</li>
-      <li>Aporta Zinc y Vitamina D3, los déficits que nadie revisa</li>
-      <li>Formulado para mujeres de 30 en adelante</li>
-      <li>Registro INVIMA</li>
-    </ul>
-    <a class="btn" style="margin-top:22px" href="/catalogo">Ver todos los productos</a></div>
+  <div class="g2" style="align-items:center">
+    <img src="/assets/tienda/kit-caja.jpg" alt="Combo Dermafol 360°: caja, suplemento de 60 cápsulas y Roll-On de 25 ml" style="border-radius:var(--radio)" width="1400" height="1400" loading="lazy">
+    <div>
+      <p class="eyebrow">Dos frentes, un tratamiento</p>
+      <h2>El shampoo trabaja sobre el tallo. La caída empieza en el folículo.</h2>
+      <p class="lede" style="margin:14px 0 22px">El folículo está milímetros por debajo de la piel. Ahí no llega nada de lo que te pones encima y se enjuaga. Por eso el protocolo son dos cosas a la vez.</p>
+      <div class="dos">
+        <div><b>Desde adentro</b><p>Saw Palmetto, Zinc y Vitamina D3 regulan la causa hormonal que miniaturiza el folículo con cada ciclo.</p></div>
+        <div><b>Desde afuera</b><p>Minoxidil 2%, la concentración estudiada para mujeres, reactiva el folículo donde dejó de crecer.</p></div>
+      </div>
+      <a class="btn" style="margin-top:24px" href="/catalogo">Ver los productos</a>
+    </div>
   </div>
 </div></section>
 

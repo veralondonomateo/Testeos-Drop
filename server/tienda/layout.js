@@ -80,6 +80,7 @@ p{margin:0 0 16px}
 /* El logotipo viene sobre fondo blanco, que es el de la cabecera: encaja sin
    recortar. En el pie, que es crema, se usa el nombre en texto por eso mismo. */
 .hd .marca img{height:26px;width:auto;display:block}
+@media(min-width:900px){ .hd .marca img{height:34px} }
 .hd nav{display:none}
 .hd .der{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
 .icono{display:grid;place-items:center;width:40px;height:40px;border:0;background:none;
