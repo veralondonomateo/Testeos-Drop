@@ -18,8 +18,10 @@
   // Aplica el tema antes del primer pintado para evitar el destello blanco
   (function () {
     try {
-      var t = localStorage.getItem('ds_theme')
-        || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      // La identidad de VERA & CO es un sistema claro. Quien no ha elegido
+      // tema ve el blanco de la marca, no el oscuro que le imponga su sistema
+      // operativo; el que prefiera oscuro lo elige y se le recuerda.
+      var t = localStorage.getItem('ds_theme') || 'light';
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   })();

@@ -201,7 +201,7 @@ const THEME_KEY = 'ds_theme';
 
 export function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
-  const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const theme = saved || 'light';   // el blanco de la marca por defecto
   document.documentElement.dataset.theme = theme;
   return theme;
 }

@@ -80,42 +80,48 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas:      #0D0D0F;
-  --surface:     #17171A;
-  --surface-2:   #1C1C20;
-  --surface-3:   #232329;
-  --overlay:     rgba(0, 0, 0, .62);
 
-  --ink:         #F7F7F8;
-  --ink-2:       #A8A8B0;
-  --muted:       #77777F;
-  --on-accent:   #131316;
+  /* El oscuro no es un negro neutro: es el verde profundo del grupo llevado
+     al fondo, con la lima como acento. Es lo que hacen las tarjetas del
+     manual — bloque verde, bloque lima— y lo que evita que el panel en
+     oscuro parezca el de cualquier otro software. */
+  --canvas:      #0E1613;
+  --surface:     #141F1A;
+  --surface-2:   #18251F;
+  --surface-3:   #1E2D26;
+  --overlay:     rgba(6, 12, 10, .66);
 
-  --line:        #2A2A30;
-  --line-soft:   #232329;
-  --ring:        rgba(255, 255, 255, .10);
+  --ink:         #F2F5F1;
+  --ink-2:       #A9B6AE;
+  --muted:       #76867D;
+  --on-accent:   #14261D;
 
-  --accent:      #F7F7F8;
-  --accent-hov:  #FFFFFF;
-  --accent-soft: #232329;
+  --line:        #26362E;
+  --line-soft:   #1E2D26;
+  --ring:        rgba(209, 232, 112, .18);
+
+  /* Lima sobre verde: el par de la identidad. */
+  --accent:      #D1E870;
+  --accent-hov:  #DCEF8E;
+  --accent-soft: #1E2D26;
 
   --series-1:    #3987e5;
   --series-2:    #d95926;
   --series-3:    #199e70;
   --series-4:    #c98500;
 
-  --good-bg:     #122412;
+  --good-bg:     #12241A;
   --warning-bg:  #2A2110;
   --serious-bg:  #2A1B14;
   --critical-bg: #2A1414;
   --info-bg:     #14202F;
 
-  --grid:        #232329;
-  --axis:        #33333A;
+  --grid:        #1E2D26;
+  --axis:        #2E3F36;
 
   --shadow-sm:   0 1px 2px rgba(0,0,0,.4);
-  --shadow:      0 4px 16px -8px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.3);
-  --shadow-lg:   0 24px 60px -28px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.4);
+  --shadow:      0 4px 16px -8px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.3);
+  --shadow-lg:   0 24px 60px -28px rgba(0,0,0,.75), 0 2px 8px rgba(0,0,0,.4);
 }
 
 /* ── Base ────────────────────────────────────────────────────────────── */
@@ -948,6 +954,10 @@ table.data td.tight { width: 1%; white-space: nowrap; }
 .marca-punto.m-tnd_dermafol{background:var(--vera-verde)}
 .marca-punto.m-tnd_plasma{background:var(--vera-naranja)}
 .marca-punto.m-todas{background:linear-gradient(135deg,var(--vera-verde) 50%,var(--vera-naranja) 50%)}
+/* En oscuro el verde de Dermafol cae sobre un fondo del mismo verde y el
+   punto desaparece. Se aclara sólo ahí: en claro el contraste ya es bueno. */
+:root[data-theme="dark"] .marca-punto.m-tnd_dermafol{background:#7FB79A}
+:root[data-theme="dark"] .marca-punto.m-todas{background:linear-gradient(135deg,#7FB79A 50%,var(--vera-naranja) 50%)}
 
 /* El logotipo del grupo lleva corchetes: van pegados y no se parten. */
 .brand-name{white-space:nowrap}
