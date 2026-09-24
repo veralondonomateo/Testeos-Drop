@@ -93,23 +93,45 @@ const CSS = `
 .muro img{aspect-ratio:1/1;object-fit:cover;border-radius:10px;background:var(--crema);width:100%}
 @media(min-width:720px){ .muro{grid-template-columns:repeat(6,1fr);gap:9px} }
 
-/* portada */
-.hero{background:var(--crema);border-radius:var(--radio);overflow:hidden;
-  display:grid;grid-template-columns:1fr;gap:0;margin-top:14px}
-.hero .tx{padding:clamp(26px,4vw,52px)}
-/* La foto del hero es una pieza de anuncio con texto quemado en la franja
-   superior. Se encuadra por abajo para quedarse con la fotografía y dejar el
-   texto fuera del recorte, en vez de reeditar el archivo. */
-.hero .im{min-height:280px;background:#ECE7E2 center bottom/cover no-repeat}
+/* ── Portada ──────────────────────────────────────────────────────────
+   En móvil la foto va arriba y a sangre completa, no como una banda recortada
+   debajo del texto: ese orden dejaba a la clienta leyendo un titular sin
+   imagen y luego un trozo de foto cortado, que es lo que se veía mal.
+   La foto es una pieza de anuncio con texto quemado en la franja superior, así
+   que se encuadra por abajo para quedarse con la fotografía. */
+.hero{display:grid;grid-template-columns:1fr;gap:0}
+.hero .im{order:-1;min-height:min(74vh,520px);
+  background:#ECE7E2 center 78%/cover no-repeat;
+  margin:0 calc(50% - 50vw);width:100vw}
+.hero .tx{padding:26px 0 8px}
 .hero h1{margin:14px 0 12px}
 .hero .pills{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
-.hero .bajo{display:flex;flex-wrap:wrap;gap:6px 18px;margin:12px 0 0;font-size:12.5px;color:var(--tinta-suave)}
+.hero .bajo{display:flex;flex-wrap:wrap;gap:6px 18px;margin:14px 0 0;font-size:12.5px;color:var(--tinta-suave)}
 .rate{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--tinta-suave)}
 .rate b{color:var(--tinta)}
-@media(min-width:860px){ .hero{grid-template-columns:1fr 1fr;align-items:stretch}
-  .hero .im{min-height:460px} }
+@media(min-width:860px){
+  /* En escritorio sí conviven en dos columnas, dentro de una tarjeta. */
+  .hero{grid-template-columns:1.05fr 1fr;align-items:stretch;
+    background:var(--crema);border-radius:var(--radio);overflow:hidden;margin-top:14px}
+  .hero .im{order:1;min-height:520px;margin:0;width:auto;background-position:center 70%}
+  .hero .tx{padding:clamp(30px,3.6vw,54px);display:flex;flex-direction:column;justify-content:center}
+}
 
-/* rejilla de producto */
+/* ── Rejilla y carrusel de producto ──────────────────────────────────
+   En móvil los productos van en riel horizontal: apilados hacia abajo
+   obligaban a recorrer toda la página para ver tres cosas, y el tercero no
+   existía para quien no bajaba. El riel los enseña de un vistazo. */
+.riel-prod{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;padding:2px 20px 6px;margin:26px calc(50% - 50vw) 0;width:100vw}
+.riel-prod::-webkit-scrollbar{display:none}
+.riel-prod>*{flex:0 0 78%;max-width:300px;scroll-snap-align:center}
+.riel-nota{font-size:12px;color:var(--tinta-tenue);margin:10px 0 0;display:flex;align-items:center;gap:6px}
+@media(min-width:720px){
+  .riel-prod{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;
+    overflow:visible;margin:26px 0 0;width:auto;padding:0}
+  .riel-prod>*{max-width:none}
+  .riel-nota{display:none}
+}
 .prod{display:flex;flex-direction:column}
 /* Las tres fotos son cuadradas y ya traen su propio fondo de estudio, así que
    llenan la baldosa de borde a borde. Antes iban sobre un marco crema con
@@ -130,7 +152,9 @@ const CSS = `
   letter-spacing:.07em;text-transform:uppercase;padding:3px 9px;border-radius:5px}
 
 /* franja */
-.franja{background:var(--tinta);color:#fff;overflow:hidden;padding:11px 0}
+/* La franja en movimiento necesita aire por arriba: pegada a la portada
+   parecía parte de ella y las dos cosas se veían apelmazadas. */
+.franja{background:var(--tinta);color:#fff;overflow:hidden;padding:12px 0;margin-top:36px}
 .pista{display:flex;gap:34px;white-space:nowrap;animation:corre 34s linear infinite;width:max-content}
 .pista span{font-size:11.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;opacity:.88}
 .pista span::after{content:'✦';margin-left:34px;opacity:.5}
@@ -247,7 +271,8 @@ ${franja()}
   <p class="eyebrow">Por dónde empezar</p>
   <h2>Tres formas de empezar</h2>
   <p class="lede" style="max-width:580px;margin-top:10px">Si no sabes cuál, empieza por el Combo: trae el suplemento y el Roll-On, que es el protocolo completo.</p>
-  <div class="g3" style="margin-top:26px">${PRODUCTOS.map(tarjetaProducto).join('')}</div>
+  <div class="riel-prod">${PRODUCTOS.map(tarjetaProducto).join('')}</div>
+  <p class="riel-nota">← Desliza para ver los tres</p>
 </div></section>
 
 <section class="sec crema"><div class="w">
@@ -310,7 +335,7 @@ export function catalogo() {
         <option value="nombre">Nombre</option></select></label>
     <span style="font-size:13.5px;color:var(--tinta-suave)">${PRODUCTOS.length} productos</span>
   </div>
-  <div class="g3" id="rejilla">${PRODUCTOS.map(tarjetaProducto).join('')}</div>
+  <div class="riel-prod" id="rejilla">${PRODUCTOS.map(tarjetaProducto).join('')}</div>
 </div></section>
 
 ${franja()}
