@@ -1043,3 +1043,28 @@ table.data td.tight { width: 1%; white-space: nowrap; }
 .funnel-step .rate{font-variant-numeric:tabular-nums;font-weight:600}
 .funnel-step .name{font-size:12.5px;letter-spacing:.02em}
 .funnel-step .val{font-variant-numeric:tabular-nums}
+
+/* ── Lectura del periodo ──────────────────────────────────────────────
+   Las frases que traducen las cifras. El tono va por color y por marca al
+   margen: el manual de marca prohíbe que el color sea la única señal, y aquí
+   además importa porque es texto que se puede estar leyendo en gris. */
+.lectura{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.lectura li{
+  display:grid; grid-template-columns:auto 1fr; gap:4px 12px;
+  padding-left:14px; border-left:3px solid var(--line);
+}
+.lectura li::before{
+  grid-row:1 / span 2; align-self:start; margin-top:2px;
+  font-size:11px; font-weight:700; letter-spacing:.06em;
+  width:1.6em; text-align:center;
+}
+.lectura b{font-weight:600;font-size:15px;letter-spacing:-.01em}
+.lectura span{grid-column:2;color:var(--ink-2);font-size:13.5px;line-height:1.55}
+.lectura li.bien  {border-left-color:var(--good)}
+.lectura li.bien::before   {content:'▲';color:var(--good)}
+.lectura li.neutro{border-left-color:var(--accent)}
+.lectura li.neutro::before {content:'–';color:var(--accent)}
+.lectura li.ojo   {border-left-color:var(--warning)}
+.lectura li.ojo::before    {content:'!';color:var(--warning)}
+.lectura li.mal   {border-left-color:var(--critical)}
+.lectura li.mal::before    {content:'▼';color:var(--critical)}

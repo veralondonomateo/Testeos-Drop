@@ -121,6 +121,19 @@ export default async function analyticsView({ host }) {
               el('div', { style: { fontSize: '19px', fontWeight: '600', marginTop: '3px' }, text: value }))))),
     }));
 
+    /* Lectura en palabras */
+    const lectura = leerPeriodo(k, data.funnel);
+    if (lectura.length) {
+      content.append(card({
+        title: 'Lectura del periodo',
+        subtitle: 'Lo que dicen estos números, en una frase cada uno',
+        body: el('ul', { class: 'lectura' },
+          ...lectura.map((f) => el('li', { class: f.tono },
+            el('b', { text: f.titular }),
+            el('span', { text: f.detalle })))),
+      }));
+    }
+
     /* KPIs secundarios */
     content.append(el('div', { class: 'stats c5' },
       statTile({ label: 'Visitas', value: num(k.views.value), delta: k.views.delta, spark: s.map((d) => d.views), color: colors[0] }),
@@ -274,4 +287,79 @@ export default async function analyticsView({ host }) {
 
   await load();
   return () => cleanups.forEach((fn) => fn?.());
+}
+
+
+/**
+ * Traduce las cifras del periodo a frases.
+ *
+ * Existe porque un panel lleno de números correctos puede seguir sin
+ * responder "¿cómo vamos?". Cada frase se calcula de los mismos datos que
+ * pintan los gráficos —no hay un segundo origen que pueda desincronizarse— y
+ * lleva su tono, que además del color usa la palabra: el color no es la única
+ * señal, como exige el manual de marca.
+ */
+function leerPeriodo(k, funnel) {
+  const frases = [];
+  const n = (x) => (Number.isFinite(x) ? x : 0);
+
+  // Rentabilidad: lo que entra por cada peso invertido.
+  const gasto = n(k.spend?.value), util = n(k.profit?.value), ingreso = n(k.revenue?.value);
+  if (gasto > 0) {
+    const roas = ingreso / gasto;
+    frases.push({
+      tono: util >= 0 ? 'bien' : 'mal',
+      titular: util >= 0 ? 'El periodo deja utilidad.' : 'El periodo cierra en pérdida.',
+      detalle: `Por cada ${money(1000)} de pauta entraron ${money(Math.round(roas * 1000))} `
+        + `en ventas cobradas. Utilidad neta: ${money(util)}.`,
+    });
+  }
+
+  // Dónde se pierde más gente en el embudo.
+  if (Array.isArray(funnel) && funnel.length >= 2) {
+    let peor = null;
+    for (let i = 1; i < funnel.length; i++) {
+      const antes = n(funnel[i - 1].value), ahora = n(funnel[i].value);
+      if (antes <= 0) continue;
+      const caida = 1 - ahora / antes;
+      if (!peor || caida > peor.caida) {
+        peor = { caida, de: funnel[i - 1].label, a: funnel[i].label, antes, ahora };
+      }
+    }
+    if (peor) {
+      frases.push({
+        tono: peor.caida > 0.8 ? 'ojo' : 'neutro',
+        titular: `La mayor fuga está entre ${peor.de.toLowerCase()} y ${peor.a.toLowerCase()}.`,
+        detalle: `Ahí se pierde el ${pct(peor.caida * 100)}: de ${num(peor.antes)} `
+          + `quedan ${num(peor.ahora)}. Es el paso que más rinde si se mejora.`,
+      });
+    }
+  }
+
+  // Entrega: en contra entrega es la mitad del negocio.
+  const entrega = n(k.delivery?.value);
+  if (entrega > 0) {
+    frases.push({
+      tono: entrega >= 70 ? 'bien' : entrega >= 55 ? 'neutro' : 'ojo',
+      titular: `Se entrega el ${pct(entrega)} de los pedidos.`,
+      detalle: entrega >= 70
+        ? 'Está en el rango sano para contra entrega.'
+        : 'Cada pedido no entregado cuesta el flete de ida, el de vuelta y el producto inmovilizado.',
+    });
+  }
+
+  // Coste de traer un pedido contra lo que deja.
+  const cpa = n(k.cpa?.value), ticket = n(k.aov?.value);
+  if (cpa > 0 && ticket > 0) {
+    const margen = ticket - cpa;
+    frases.push({
+      tono: margen > 0 ? 'neutro' : 'mal',
+      titular: margen > 0
+        ? `Cada pedido deja ${money(margen)} antes de producto y flete.`
+        : 'Traer un pedido cuesta más de lo que factura.',
+      detalle: `Cuesta ${money(cpa)} conseguirlo y factura ${money(ticket)} de media.`,
+    });
+  }
+
+  return frases;
 }
