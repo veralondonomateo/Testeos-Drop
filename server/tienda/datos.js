@@ -81,12 +81,11 @@ export const PRODUCTOS = [
     precio: 80000,
     antes: 0,
     categoria: 'topicos',
-    imagen: '/assets/tienda/aplicando-rollon.jpg',
-    // La foto es una pieza de anuncio con un bloque de texto en la franja
-    // superior. Se encuadra por abajo para quedarse con la fotografía; reeditar
-    // el archivo daría lo mismo y aquí queda dicho por qué está torcido.
-    encuadre: 'center 78%',
-    galeria: ['/assets/tienda/aplicando-rollon.jpg', '/assets/dermafol/combo-880.webp'],
+    // La portada es fotografía de producto; la de estilo de vida va después en
+    // la galería. Un anuncio recortado como portada se nota, y lo que la
+    // clienta quiere ver primero en una ficha es el frasco.
+    imagen: '/assets/dermafol/combo-880.webp',
+    galeria: ['/assets/dermafol/combo-880.webp', '/assets/tienda/aplicando-rollon.jpg'],
     resumen: 'Tónico capilar de 25 ml con Minoxidil 2%, la concentración estudiada para mujeres. Se aplica directamente en entradas, coronilla y línea frontal.',
     contiene: ['Tónico capilar · 25 ml'],
     activos: ['Minoxidil 2%'],

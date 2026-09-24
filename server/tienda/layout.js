@@ -116,7 +116,10 @@ p{margin:0 0 16px}
 /* pie */
 .ft{background:var(--crema);border-top:1px solid var(--linea);padding:52px 0 26px;margin-top:40px}
 .ft .cols{display:grid;grid-template-columns:1fr;gap:30px}
-.ft .marca{font-size:21px;font-weight:700;letter-spacing:-.03em;margin-bottom:8px}
+/* El logotipo viene en negro sobre blanco. En el pie, que es crema, se funde
+   con multiply: el blanco desaparece y el negro se mantiene. Es lo que evita
+   el recuadro blanco sin tener que reeditar el archivo. */
+.ft .marca{height:30px;width:auto;margin:0 0 12px;mix-blend-mode:multiply}
 .ft .kick{font-size:13.5px;color:var(--tinta-suave);max-width:270px}
 .ft h4{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-tenue);
   margin:0 0 12px;font-weight:700}
@@ -183,7 +186,7 @@ function cabecera(ruta) {
   </div>
 </div></header>
 <div class="menu" id="menu" aria-hidden="true">
-  <div class="top"><b>Dermafol</b>
+  <div class="top"><img src="/assets/marca/dermafol-logotipo.png" alt="Dermafol" height="24" style="height:24px;width:auto">
     <button class="icono" type="button" data-menu-cerrar aria-label="Cerrar menú">${ICONOS.cerrar}</button></div>
   <ul>${NAV.map(([u, t]) => `<li><a href="${u}">${t}</a></li>`).join('')}
     <li><a href="/preguntas-frecuentes">Preguntas frecuentes</a></li>
@@ -198,7 +201,7 @@ function pie() {
     items.map(([u, x]) => `<li><a href="${u}">${x}</a></li>`).join('')}</ul></div>`;
   return `<footer class="ft"><div class="w">
   <div class="cols">
-    <div><div class="marca">Dermafol</div>
+    <div><img class="marca" src="/assets/marca/dermafol-logotipo.png" alt="Dermafol" width="150" height="50">
       <p class="kick">Cuidado capilar con respaldo clínico para mujeres de 30 en adelante.</p></div>
     ${col('Productos', [['/producto/combo-dermafol-360', 'Combo Dermafol 360°'],
       ['/producto/suplemento-capilar', 'Suplemento Capilar'],

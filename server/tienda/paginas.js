@@ -104,8 +104,14 @@ const CSS = `
 
 /* rejilla de producto */
 .prod{display:flex;flex-direction:column}
-.prod .foto{display:block;background:var(--crema)}
-.prod .foto img{aspect-ratio:1/1;object-fit:cover;width:100%}
+/* Encaje completo y no recorte: son fotos de producto, y recortarlas al
+   cuadrado corta frascos por la mitad. El fondo suave hace de passe-partout
+   para que las tres portadas se vean de la misma familia aunque vengan de
+   sesiones distintas. */
+.prod .foto{display:block;background:var(--crema);padding:14px}
+.prod .foto img{aspect-ratio:1/1;object-fit:contain;width:100%;
+  mix-blend-mode:multiply;transition:transform .25s ease}
+.prod:hover .foto img{transform:scale(1.03)}
 .prod .cuerpo{padding:16px;display:flex;flex-direction:column;gap:7px;flex:1}
 .prod h3{font-size:16.5px}
 .prod h3 a{text-decoration:none}
@@ -142,12 +148,12 @@ const CSS = `
 .ficha{display:grid;grid-template-columns:1fr;gap:26px;margin-top:18px}
 .ficha .gal{display:grid;gap:9px}
 .ficha .gal .pri{border-radius:var(--radio);overflow:hidden;background:var(--crema)}
-.ficha .gal .pri img{aspect-ratio:1/1;object-fit:cover;width:100%}
+.ficha .gal .pri img{aspect-ratio:1/1;object-fit:contain;width:100%;padding:20px;mix-blend-mode:multiply}
 .ficha .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
 .ficha .mini button{padding:0;border:1.5px solid var(--linea);border-radius:var(--radio-s);
   overflow:hidden;background:var(--crema);cursor:pointer}
 .ficha .mini button[aria-current]{border-color:var(--tinta)}
-.ficha .mini img{aspect-ratio:1/1;object-fit:cover}
+.ficha .mini img{aspect-ratio:1/1;object-fit:contain;padding:6px;mix-blend-mode:multiply}
 .ficha .precio{display:flex;align-items:baseline;gap:11px;margin:14px 0}
 .ficha .precio b{font-size:30px;letter-spacing:-.03em}
 .ficha .precio s{color:var(--tinta-tenue)}
@@ -337,7 +343,7 @@ export function producto(slug) {
     <a href="/" style="text-decoration:none">Inicio</a> · <a href="/catalogo" style="text-decoration:none">Catálogo</a> · ${esc(p.nombre)}</nav>
   <div class="ficha">
     <div class="gal">
-      <div class="pri"><img id="foto" src="${p.galeria[0]}" alt="${esc(p.nombre)}" width="900" height="900"${p.encuadre ? ` style="object-position:${p.encuadre}"` : ''}></div>
+      <div class="pri"><img id="foto" src="${p.galeria[0]}" alt="${esc(p.nombre)}" width="900" height="900"></div>
       ${p.galeria.length > 1 ? `<div class="mini">${p.galeria.map((g, i) =>
         `<button type="button" data-foto="${g}"${i === 0 ? ' aria-current="true"' : ''}><img src="${g}" alt="" width="200" height="200" loading="lazy"></button>`).join('')}</div>` : ''}
     </div>

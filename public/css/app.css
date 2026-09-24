@@ -17,11 +17,12 @@
   --vera-azul:   #184ACD;
   --vera-naranja:#DE633E;
 
-  /* Superficies */
-  --canvas:      #F4F4F1;
+  /* Superficies — el manual es un sistema blanco y aireado; el verde es
+     acento, no relleno. Por eso el lienzo casi no se separa del papel. */
+  --canvas:      #FCFCFB;
   --surface:     #FFFFFF;
-  --surface-2:   #FAFAFA;
-  --surface-3:   #F1F1F3;
+  --surface-2:   #FAFAF9;
+  --surface-3:   #F4F4F2;
   --overlay:     rgba(18, 18, 22, .48);
 
   /* Tinta */
@@ -31,8 +32,8 @@
   --on-accent:   #FFFFFF;
 
   /* Líneas */
-  --line:        #E7E7EA;
-  --line-soft:   #F0F0F2;
+  --line:        #ECECE8;
+  --line-soft:   #F4F4F1;
   --ring:        rgba(19, 19, 22, .10);
 
   /* Acento: el verde del grupo, no el negro genérico */
@@ -63,8 +64,8 @@
   --axis:        #D8D8DD;
 
   /* Elevación */
-  --shadow-sm:   0 1px 2px rgba(19,19,22,.05);
-  --shadow:      0 4px 16px -8px rgba(19,19,22,.16), 0 1px 2px rgba(19,19,22,.04);
+  --shadow-sm:   0 1px 2px rgba(29,66,52,.04);
+  --shadow:      0 4px 16px -10px rgba(29,66,52,.12), 0 1px 2px rgba(29,66,52,.03);
   --shadow-lg:   0 24px 60px -28px rgba(19,19,22,.32), 0 2px 8px rgba(19,19,22,.06);
 
   /* Métrica */
@@ -949,4 +950,21 @@ table.data td.tight { width: 1%; white-space: nowrap; }
 .marca-punto.m-todas{background:linear-gradient(135deg,var(--vera-verde) 50%,var(--vera-naranja) 50%)}
 
 /* El logotipo del grupo lleva corchetes: van pegados y no se parten. */
-.brand-name{white-space:nowrap;letter-spacing:-.01em}
+.brand-name{white-space:nowrap}
+
+
+/* ── El logotipo del grupo ────────────────────────────────────────────
+   En el manual va en peso fino y tracking amplio, no en negrita: los
+   corchetes hacen el peso y la letra respira. Ponerlo en bold es el error
+   que lo convierte en un logo de software genérico. */
+.brand-name{
+  font-family:var(--font-display);
+  font-weight:400;
+  letter-spacing:.18em;
+  font-size:14.5px;
+  text-transform:uppercase;
+}
+.brand-sub{letter-spacing:.06em;font-size:10.5px;text-transform:uppercase;opacity:.72}
+.login-art .brand-name{font-size:15.5px}
+/* En la portada del login el titular es editorial y respira. */
+.login-art h2{letter-spacing:-.035em;line-height:1.08;white-space:pre-line}
