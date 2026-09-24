@@ -69,7 +69,7 @@ const bloqueTestimonios = () => `<section class="sec crema"><div class="w">
 </div></section>`;
 
 const franja = () => `<div class="franja"><div class="pista">${
-  Array(2).fill('<span>Formulación clínica</span><span>Minoxidil 2%</span><span>Envío gratis</span><span>Pago contra entrega</span><span>Garantía de 90 días</span><span>Para mujeres 30+</span>').join('')
+  Array(2).fill('<span>Formulación clínica</span><span>Sin minoxidil</span><span>Envío gratis</span><span>Pago contra entrega</span><span>Garantía de 90 días</span><span>Para mujeres 30+</span>').join('')
 }</div></div>`;
 
 /* ── CSS propio de la tienda ─────────────────────────────────────────── */
@@ -347,7 +347,7 @@ ${franja()}
       <p class="lede" style="margin:14px 0 22px">El folículo está milímetros por debajo de la piel. Ahí no llega nada de lo que te pones encima y se enjuaga. Por eso el protocolo son dos cosas a la vez.</p>
       <div class="dos">
         <div><b>Desde adentro</b><p>Saw Palmetto, Zinc y Vitamina D3 regulan la causa hormonal que miniaturiza el folículo con cada ciclo.</p></div>
-        <div><b>Desde afuera</b><p>Minoxidil 2%, la concentración estudiada para mujeres, reactiva el folículo donde dejó de crecer.</p></div>
+        <div><b>Desde afuera</b><p>Trichogen, un complejo botánico sin minoxidil, reactiva el folículo donde dejó de crecer.</p></div>
       </div>
       <a class="btn" style="margin-top:24px" href="/catalogo">Ver los productos</a>
     </div>

@@ -43,7 +43,7 @@ export const PRODUCTOS = [
       '/assets/tienda/suplemento-abierto.jpg', '/assets/tienda/aplicando-rollon.jpg'],
     resumen: 'Suplemento de 60 cápsulas y Roll-On de 25 ml. Trata la causa hormonal desde adentro y reactiva el folículo desde afuera, que es lo que ninguno de los dos hace solo.',
     contiene: ['Suplemento Capilar · 60 cápsulas · 30 días', 'Roll-On Dermoestimulante · 25 ml'],
-    activos: ['Saw Palmetto', 'Zinc', 'Vitamina D3', 'Biotina', 'Colágeno hidrolizado', 'Minoxidil 2%'],
+    activos: ['Saw Palmetto', 'Zinc', 'Vitamina D3', 'Biotina', 'Colágeno hidrolizado', 'Trichogen'],
     modoUso: [
       ['Cada mañana', 'Toma 2 cápsulas del suplemento con agua, una vez al día.'],
       ['Cada noche', 'Aplica el Roll-On antes de dormir y masajea un minuto. No hay que enjuagar.'],
@@ -86,14 +86,14 @@ export const PRODUCTOS = [
     // clienta quiere ver primero en una ficha es el frasco.
     imagen: '/assets/dermafol/combo-880.webp',
     galeria: ['/assets/dermafol/combo-880.webp', '/assets/tienda/aplicando-rollon.jpg'],
-    resumen: 'Tónico capilar de 25 ml con Minoxidil 2%, la concentración estudiada para mujeres. Se aplica directamente en entradas, coronilla y línea frontal.',
+    resumen: 'Tónico capilar de 25 ml con Trichogen, un complejo botánico sin minoxidil. Se aplica directamente en entradas, coronilla y línea frontal.',
     contiene: ['Tónico capilar · 25 ml'],
-    activos: ['Minoxidil 2%'],
+    activos: ['Trichogen'],
     modoUso: [
       ['Aplicación', 'Una vez al día sobre el cuero cabelludo seco, en la zona a tratar.'],
       ['Masaje', 'Un minuto con las yemas. No se enjuaga.'],
     ],
-    aviso: 'Contiene Minoxidil 2%. Contraindicado durante el embarazo y la lactancia.',
+    aviso: 'Sin minoxidil. En embarazo y lactancia, consulta con tu médico antes de empezar.',
     variantes: [{ qty: 1, etiqueta: '1 unidad', precio: 80000, antes: 0 }],
   },
 ];
@@ -111,7 +111,7 @@ export const FAQ = [
   ['¿Cuánto tarda en verse resultados?',
     'La mayoría nota reducción de caída entre la semana 4 y 6. La densidad y los cabellos nuevos aparecen entre la semana 8 y 12. El ciclo capilar completo requiere constancia; no hay atajos biológicos.'],
   ['¿Puedo usarlo si estoy embarazada o lactando?',
-    'No. El Roll-On contiene Minoxidil 2%, contraindicado durante el embarazo y la lactancia. Consulta con tu médico antes de iniciar cualquier tratamiento capilar.'],
+    'Consúltalo antes con tu médico. El Roll-On no lleva minoxidil, pero en embarazo y lactancia no recomendamos empezar ningún tratamiento capilar por tu cuenta.'],
   ['¿Y si no me funciona?',
     'Tienes 90 días de garantía. Si no notas ningún cambio en la caída, nos escribes y te devolvemos el 100% de tu dinero, sin preguntas y sin devolver los frascos.'],
   ['¿Tengo que pagar por adelantado?',
@@ -121,9 +121,9 @@ export const FAQ = [
   ['¿Sirve si mi caída es por estrés y no hormonal?',
     'Sí. El suplemento incluye activos que reducen el impacto del cortisol en el ciclo capilar, que es la vía por la que el estrés provoca la caída.'],
   ['¿El Roll-On tiene efectos secundarios?',
-    'El Minoxidil 2% puede causar irritación leve en el cuero cabelludo las primeras semanas. Si aparece enrojecimiento persistente, suspende el uso y consulta a un dermatólogo.'],
-  ['¿Puedo usarlo si ya probé minoxidil solo?',
-    'Sí. De hecho es el caso más común: el minoxidil reactiva el folículo pero no toca la causa hormonal, y por eso muchas mujeres se estancan a los pocos meses.'],
+    'No lleva minoxidil, así que no arrastra sus contraindicaciones. Como con cualquier tópico, en pieles sensibles puede haber una leve irritación al principio: prueba primero en una zona pequeña. Si el enrojecimiento persiste, suspende y consulta a un dermatólogo.'],
+  ['Ya probé minoxidil y lo dejé. ¿Esto es distinto?',
+    'Sí, en dos cosas. El Roll-On no lleva minoxidil —usa Trichogen, un complejo botánico—, así que no arrastra sus contraindicaciones ni la irritación que hace que muchas lo abandonen. Y el minoxidil, además, nunca tocó la causa hormonal: eso lo trabaja el suplemento desde adentro.'],
 ];
 
 /** Testimonios reales, verificados contra el muro de la landing. */
