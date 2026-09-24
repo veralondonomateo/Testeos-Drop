@@ -94,29 +94,52 @@ const CSS = `
 @media(min-width:720px){ .muro{grid-template-columns:repeat(6,1fr);gap:9px} }
 
 /* ── Portada ──────────────────────────────────────────────────────────
-   En móvil la foto va arriba y a sangre completa, no como una banda recortada
-   debajo del texto: ese orden dejaba a la clienta leyendo un titular sin
-   imagen y luego un trozo de foto cortado, que es lo que se veía mal.
-   La foto es una pieza de anuncio con texto quemado en la franja superior, así
-   que se encuadra por abajo para quedarse con la fotografía. */
-.hero{display:grid;grid-template-columns:1fr;gap:0}
-.hero .im{order:-1;min-height:min(74vh,520px);
-  background:#ECE7E2 center 78%/cover no-repeat;
-  margin:0 calc(50% - 50vw);width:100vw}
-.hero .tx{padding:26px 0 8px}
-.hero h1{margin:14px 0 12px}
-.hero .pills{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}
-.hero .bajo{display:flex;flex-wrap:wrap;gap:6px 18px;margin:14px 0 0;font-size:12.5px;color:var(--tinta-suave)}
-.rate{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--tinta-suave)}
+   La referencia manda el orden: primero lo que se lee —valoración, titular,
+   promesa, píldoras—, después la imagen, y el botón al final en móvil. En
+   escritorio el botón sube a la columna de texto, porque ahí la imagen va al
+   lado y no entre medias. */
+.hero-wrap{padding:18px 0 0}
+.hero{display:grid;grid-template-columns:1fr;gap:0;
+  background:linear-gradient(180deg,var(--crema),#fff 78%);
+  border-radius:var(--radio);padding:24px 20px 22px;
+  margin:0 -20px;border:1px solid var(--linea)}
+.hero h1{margin:12px 0 10px;font-size:clamp(27px,6.4vw,38px)}
+.hero .lede{margin:0 0 18px}
+.hero .pills{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 4px}
+.hero .bajo{display:flex;flex-wrap:wrap;gap:5px 16px;margin:12px 0 0;
+  font-size:12px;color:var(--tinta-suave)}
+.rate{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--tinta-suave)}
 .rate b{color:var(--tinta)}
-@media(min-width:860px){
-  /* En escritorio sí conviven en dos columnas, dentro de una tarjeta. */
-  .hero{grid-template-columns:1.05fr 1fr;align-items:stretch;
-    background:var(--crema);border-radius:var(--radio);overflow:hidden;margin-top:14px}
-  .hero .im{order:1;min-height:520px;margin:0;width:auto;background-position:center 70%}
-  .hero .tx{padding:clamp(30px,3.6vw,54px);display:flex;flex-direction:column;justify-content:center}
-}
+.rate .av{display:inline-flex}
+.rate .av img{width:26px;height:26px;border-radius:50%;object-fit:cover;
+  border:2px solid #fff;margin-right:-9px}
 
+/* La imagen y la prueba: la mujer manda y el antes/después se apoya en ella,
+   como en la referencia. Nada se recorta — la foto entra entera. */
+.hero .im{position:relative;margin:20px 0 0;display:flex;justify-content:center}
+.hero .im .mujer{width:min(78%,300px);height:auto;display:block}
+.hero .prueba{position:absolute;right:0;bottom:6px;width:min(42%,158px);margin:0;
+  background:#fff;border:1px solid var(--linea);border-radius:13px;padding:7px;
+  box-shadow:0 12px 30px -16px rgba(46,46,46,.3)}
+.hero .prueba img{width:100%;border-radius:8px;display:block;aspect-ratio:1/1;object-fit:cover}
+.hero .prueba figcaption{font-size:9.5px;line-height:1.3;color:var(--tinta-tenue);
+  margin-top:6px;text-align:center}
+
+.cta-pc{display:none}
+.cta-mov{margin-top:20px}
+
+@media(min-width:900px){
+  /* Dos columnas: texto a la izquierda con su botón, imagen a la derecha.
+     La imagen no se recorta ni se estira: se le da alto y ella manda el suyo. */
+  .hero{grid-template-columns:1.02fr 1fr;align-items:center;gap:36px;
+    padding:clamp(34px,3.4vw,54px);margin:14px 0 0}
+  .hero h1{font-size:clamp(34px,3.1vw,44px);margin:14px 0 12px}
+  .hero .im{margin:0;justify-content:flex-end;align-items:flex-end}
+  .hero .im .mujer{width:auto;max-height:440px;max-width:100%}
+  .hero .prueba{width:150px;right:-6px;bottom:14px}
+  .cta-pc{display:block;margin-top:22px}
+  .cta-mov{display:none}
+}
 /* ── Rejilla y carrusel de producto ──────────────────────────────────
    En móvil los productos van en riel horizontal: apilados hacia abajo
    obligaban a recorrer toda la página para ver tres cosas, y el tercero no
@@ -250,18 +273,30 @@ const JS_ADD = `<script>
 
 export function home() {
   const cuerpo = `
-<section style="padding-top:18px"><div class="w">
+<section class="hero-wrap"><div class="w">
   <div class="hero">
     <div class="tx">
-      <div class="rate"><span style="color:#E8A13A;letter-spacing:2px">★★★★★</span>
+      <div class="rate"><span class="av"><img src="/assets/testimonios/t04.jpg" alt=""><img src="/assets/testimonios/t06.jpg" alt=""></span>
         <span><b>4.67</b> · +800 clientas en Colombia</span></div>
       <h1>Tu cabello no se cae por tu edad. Son tus hormonas.</h1>
-      <p class="lede">El suplemento regula la causa hormonal. El Roll-On reactiva el folículo. Ninguno resuelve la caída por separado, y por eso el kit trae los dos.</p>
-      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">Registro INVIMA</span></div>
-      <a class="btn" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
-      <div class="bajo"><span>✓ Envío gratis a todo el país</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
+      <p class="lede">Trata la causa desde adentro y reactiva el folículo desde afuera.</p>
+      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span></div>
+      <div class="cta-pc">
+        <a class="btn btn-b" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
+        <div class="bajo"><span>✓ Envíos a todo Colombia</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
+      </div>
     </div>
-    <div class="im" style="background-image:url('/assets/tienda/mujer-sonriendo.jpg')"></div>
+    <div class="im">
+      <img class="mujer" src="/assets/tienda/hero-mujer.jpg" alt="Mujer de perfil con el cabello suelto" width="878" height="1042" fetchpriority="high">
+      <figure class="prueba">
+        <img src="/assets/testimonios/t06.jpg" alt="Antes y después del cuero cabelludo de una clienta" width="420" height="420" loading="lazy">
+        <figcaption>Antes y después · foto de una clienta</figcaption>
+      </figure>
+    </div>
+    <div class="cta-mov">
+      <a class="btn btn-b" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
+      <div class="bajo"><span>✓ Envíos a todo Colombia</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
+    </div>
   </div>
 </div></section>
 
