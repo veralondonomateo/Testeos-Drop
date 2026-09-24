@@ -1,6 +1,6 @@
 import {
   el, clear, api, money, moneyShort, num, numShort, pct, fmtDate,
-  orderStatus, seriesColors, toastError,
+  orderStatus, seriesColors, toastError, huecos, TAPADO,
 } from '../core.js';
 import { icon } from '../icons.js';
 import {
@@ -97,6 +97,12 @@ export default async function analyticsView({ host }) {
     const colors = seriesColors();
 
     /* Hero: la única cifra que encabeza la vista */
+    const cob = data.cobertura || null;
+    const faltan = huecos(cob);
+    const faltaPauta = faltan.some((f) => f.clave === 'pauta');
+    const sinCosto = faltan.some((f) => f.clave === 'costo');
+    const sinEntrega = faltan.some((f) => f.clave === 'entrega');
+
     content.append(card({
       body: el('div', { class: 'row wrap', style: { gap: '32px' } },
         el('div', {},
@@ -113,16 +119,31 @@ export default async function analyticsView({ host }) {
             }))),
         el('div', { class: 'spacer' }),
         el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: '28px' } },
-          [['Utilidad neta', money(k.profit.value)],
-            ['Inversión en pauta', money(k.spend.value)],
-            ['Ticket promedio', money(k.aov.value)]].map(([label, value]) =>
+          [['Utilidad neta', sinCosto ? TAPADO : money(k.profit.value),
+            sinCosto ? 'falta el coste de producto' : null],
+            ['Inversión en pauta', money(k.spend.value),
+              faltaPauta ? `sólo ${num(cob.dias_con_pauta)} de ${num(cob.dias_periodo)} días` : null],
+            ['Ticket promedio', money(k.aov.value), null]].map(([label, value, nota]) =>
             el('div', {},
               el('div', { class: 'small muted', text: label }),
-              el('div', { style: { fontSize: '19px', fontWeight: '600', marginTop: '3px' }, text: value }))))),
+              el('div', { style: { fontSize: '19px', fontWeight: '600', marginTop: '3px' }, text: value }),
+              nota ? el('div', { class: 'small muted', style: { marginTop: '2px' }, text: nota }) : null)))),
     }));
 
+    /* Lo que no se puede calcular, dicho antes de que nadie decida con ello */
+    if (faltan.length) {
+      content.append(card({
+        title: 'Antes de leer estas cifras',
+        subtitle: `${faltan.length === 1 ? 'Un dato que falta' : `${num(faltan.length)} datos que faltan`} y qué cifra deja sin base`,
+        body: el('ul', { class: 'lectura' },
+          ...faltan.map((f) => el('li', { class: 'ojo' },
+            el('b', { text: f.titulo }),
+            el('span', { text: `${f.detalle} ${f.arreglo}` })))),
+      }));
+    }
+
     /* Lectura en palabras */
-    const lectura = leerPeriodo(k, data.funnel);
+    const lectura = leerPeriodo(k, data.funnel, cob);
     if (lectura.length) {
       content.append(card({
         title: 'Lectura del periodo',
@@ -139,8 +160,18 @@ export default async function analyticsView({ host }) {
       statTile({ label: 'Visitas', value: num(k.views.value), delta: k.views.delta, spark: s.map((d) => d.views), color: colors[0] }),
       statTile({ label: 'Pedidos', value: num(k.orders.value), delta: k.orders.delta, spark: s.map((d) => d.orders), color: colors[2] }),
       statTile({ label: 'Conversión', value: pct(k.cr.value, 2), delta: k.cr.delta, hint: 'visita → pedido' }),
-      statTile({ label: 'CPA', value: money(k.cpa.value), delta: k.cpa.delta, inverse: true }),
-      statTile({ label: 'Tasa de entrega', value: pct(k.delivery.value), hint: 'de los pedidos del periodo' })));
+      statTile({
+        label: 'CPA',
+        value: faltaPauta ? TAPADO : money(k.cpa.value),
+        delta: faltaPauta ? null : k.cpa.delta,
+        inverse: true,
+        hint: faltaPauta ? 'falta inversión por cargar' : 'coste por pedido',
+      }),
+      statTile({
+        label: 'Tasa de entrega',
+        value: sinEntrega ? TAPADO : pct(k.delivery.value),
+        hint: sinEntrega ? 'sin estados reales' : 'de los pedidos del periodo',
+      })));
 
     /* Serie de ingresos */
     const revHost = el('div');
@@ -299,13 +330,16 @@ export default async function analyticsView({ host }) {
  * lleva su tono, que además del color usa la palabra: el color no es la única
  * señal, como exige el manual de marca.
  */
-function leerPeriodo(k, funnel) {
+function leerPeriodo(k, funnel, cob) {
   const frases = [];
+  const sinSoporte = new Set(huecos(cob).map((f) => f.clave));
   const n = (x) => (Number.isFinite(x) ? x : 0);
 
   // Rentabilidad: lo que entra por cada peso invertido.
   const gasto = n(k.spend?.value), util = n(k.profit?.value), ingreso = n(k.revenue?.value);
-  if (gasto > 0) {
+  // Sin el gasto entero o sin costes de producto, esta frase sólo sabría
+  // mentir a favor: se calla y lo explica la tarjeta de datos que faltan.
+  if (gasto > 0 && !sinSoporte.has('pauta') && !sinSoporte.has('costo')) {
     const roas = ingreso / gasto;
     frases.push({
       tono: util >= 0 ? 'bien' : 'mal',
@@ -323,7 +357,8 @@ function leerPeriodo(k, funnel) {
       if (antes <= 0) continue;
       const caida = 1 - ahora / antes;
       if (!peor || caida > peor.caida) {
-        peor = { caida, de: funnel[i - 1].label, a: funnel[i].label, antes, ahora };
+        // El API llama `stage` a la etiqueta del paso, no `label`.
+        peor = { caida, de: funnel[i - 1].stage, a: funnel[i].stage, antes, ahora };
       }
     }
     if (peor) {
@@ -338,7 +373,7 @@ function leerPeriodo(k, funnel) {
 
   // Entrega: en contra entrega es la mitad del negocio.
   const entrega = n(k.delivery?.value);
-  if (entrega > 0) {
+  if (entrega > 0 && !sinSoporte.has('entrega')) {
     frases.push({
       tono: entrega >= 70 ? 'bien' : entrega >= 55 ? 'neutro' : 'ojo',
       titular: `Se entrega el ${pct(entrega)} de los pedidos.`,
@@ -350,7 +385,7 @@ function leerPeriodo(k, funnel) {
 
   // Coste de traer un pedido contra lo que deja.
   const cpa = n(k.cpa?.value), ticket = n(k.aov?.value);
-  if (cpa > 0 && ticket > 0) {
+  if (cpa > 0 && ticket > 0 && !sinSoporte.has('pauta')) {
     const margen = ticket - cpa;
     frases.push({
       tono: margen > 0 ? 'neutro' : 'mal',

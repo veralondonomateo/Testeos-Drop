@@ -1,6 +1,6 @@
 import {
   el, clear, api, state, money, moneyShort, num, numShort, pct,
-  fmtAgo, fmtDate, orderStatus, seriesColors,
+  fmtAgo, fmtDate, orderStatus, seriesColors, huecos, TAPADO,
 } from '../core.js';
 import { icon } from '../icons.js';
 import {
@@ -79,31 +79,61 @@ export default async function dashboard({ host }) {
       }));
     }
 
-    /* ── KPIs ── */
+    /* ── KPIs ──
+       Las cifras que dependen de un dato que no está —la pauta del periodo, el
+       coste de producto, el estado real de entrega— se muestran tapadas. Un
+       ROAS de 48× calculado sobre un día de gasto de treinta no es una buena
+       noticia: es una resta que no se hizo. */
+    const faltan = huecos(data.cobertura);
+    const faltaPauta = faltan.some((f) => f.clave === 'pauta');
+    const sinCosto = faltan.some((f) => f.clave === 'costo');
+    const sinEntrega = faltan.some((f) => f.clave === 'entrega');
     const profitPositive = k.profit.value >= 0;
+
     content.append(el('div', { class: 'stats c5' },
       statTile({
         label: 'Ingresos cobrados', value: money(k.revenue.value), delta: k.revenue.delta,
         hint: 'pedidos entregados', spark: s.map((d) => d.revenue), color: colors[0],
       }),
       statTile({
-        label: 'Utilidad neta', value: money(k.profit.value), delta: k.profit.delta,
-        hint: 'ingresos − producto − pauta',
-        badge: el('span', { class: `badge ${profitPositive ? 'good' : 'critical'}` },
+        label: 'Utilidad neta',
+        value: sinCosto ? TAPADO : money(k.profit.value),
+        delta: sinCosto ? null : k.profit.delta,
+        hint: sinCosto ? 'falta el coste de producto' : 'ingresos − producto − pauta',
+        badge: sinCosto ? null : el('span', { class: `badge ${profitPositive ? 'good' : 'critical'}` },
           profitPositive ? 'En positivo' : 'En rojo'),
       }),
       statTile({
         label: 'Pedidos', value: num(k.orders.value), delta: k.orders.delta,
-        hint: `${pct(k.delivery.value)} entregados`, spark: s.map((d) => d.orders), color: colors[2],
+        hint: sinEntrega ? 'sin estados reales' : `${pct(k.delivery.value)} entregados`,
+        spark: s.map((d) => d.orders), color: colors[2],
       }),
       statTile({
-        label: 'CPA', value: money(k.cpa.value), delta: k.cpa.delta, inverse: true,
-        hint: `${money(k.spend.value)} invertidos`,
+        label: 'CPA',
+        value: faltaPauta ? TAPADO : money(k.cpa.value),
+        delta: faltaPauta ? null : k.cpa.delta, inverse: true,
+        hint: faltaPauta
+          ? `sólo ${num(data.cobertura?.dias_con_pauta || 0)} de ${num(data.cobertura?.dias_periodo || 0)} días de pauta`
+          : `${money(k.spend.value)} invertidos`,
       }),
       statTile({
-        label: 'ROAS', value: `${String(k.roas.value).replace('.', ',')}×`, delta: k.roas.delta,
-        hint: `conversión ${pct(k.cr.value, 2)}`,
+        label: 'ROAS',
+        value: faltaPauta ? TAPADO : `${String(k.roas.value).replace('.', ',')}×`,
+        delta: faltaPauta ? null : k.roas.delta,
+        hint: faltaPauta ? 'falta inversión por cargar' : `conversión ${pct(k.cr.value, 2)}`,
       })));
+
+    /* Lo que falta, dicho donde se toman las decisiones */
+    if (faltan.length) {
+      content.append(card({
+        title: 'Datos que faltan',
+        subtitle: 'Mientras no estén, estas cifras se quedan tapadas',
+        body: el('ul', { class: 'lectura' },
+          ...faltan.map((f) => el('li', { class: 'ojo' },
+            el('b', { text: f.titulo }),
+            el('span', { text: `${f.detalle} ${f.arreglo}` })))),
+      }));
+    }
 
     /* ── Gráfico principal + embudo ── */
     const chartHost = el('div');

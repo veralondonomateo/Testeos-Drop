@@ -71,6 +71,19 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 /** "12 ago" o "12 ago 2025" si es de otro año */
 export function fmtDate(iso, withYear = false) {
   if (!iso) return '—';
+
+  // Una fecha suelta —"2026-08-26"— es un día del negocio, no un instante.
+  // `new Date()` la lee como medianoche UTC, y al pintarla en Bogotá (−5) se
+  // iba al día anterior: el panel llevaba todo un mes mostrando cada fecha
+  // corrida un día, desde la cabecera del rango hasta la tabla diaria y el eje
+  // de inversión. Se parte a mano y no se mueve.
+  const solo = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+  if (solo) {
+    const [, a, m, d] = solo;
+    const y = Number(a) !== new Date().getFullYear() || withYear ? ` ${a}` : '';
+    return `${Number(d)} ${MONTHS[Number(m) - 1]}${y}`;
+  }
+
   const d = new Date(iso);
   if (Number.isNaN(+d)) return '—';
   const y = d.getFullYear() !== new Date().getFullYear() || withYear ? ` ${d.getFullYear()}` : '';
@@ -268,3 +281,59 @@ export async function copyText(text) {
 
 /** Paleta de series resuelta según el tema activo. */
 export const seriesColors = () => [token('series-1'), token('series-2'), token('series-3'), token('series-4')];
+
+/**
+ * Qué cifras no se pueden sostener con los datos que hay.
+ *
+ * Cada entrada dice qué falta, a qué métrica deja sin base y qué hay que hacer
+ * para arreglarlo. El panel las usa dos veces: para tapar la cifra afectada y
+ * para explicarlo arriba, antes de que nadie tome una decisión con ella.
+ */
+export function huecos(cob) {
+  if (!cob) return [];
+  const out = [];
+
+  // La pauta es la que más engaña: sin ella el ROAS y el CPA salen preciosos.
+  if (cob.dias_con_pauta < cob.dias_periodo) {
+    const faltan = cob.dias_periodo - cob.dias_con_pauta;
+    out.push({
+      clave: 'pauta',
+      titulo: cob.dias_con_pauta === 0
+        ? 'No hay inversión publicitaria cargada en este periodo.'
+        : `La inversión sólo cubre ${num(cob.dias_con_pauta)} de ${num(cob.dias_periodo)} días.`,
+      detalle: (cob.ultimo_dia_con_pauta
+        ? `El último día con gasto es el ${fmtDate(cob.ultimo_dia_con_pauta)}; faltan ${num(faltan)} ${faltan === 1 ? 'día' : 'días'}. `
+        : '')
+        + 'Sin el gasto completo, el CPA y el ROAS salen mucho mejores de lo que son.',
+      arreglo: 'La sincronización con Meta necesita el token de la cuenta de anuncios (META_ADS_TOKEN).',
+    });
+  }
+
+  // El coste de producto: sin él la "utilidad" es sólo la facturación.
+  if (cob.pedidos > 0 && cob.pedidos_con_costo < cob.pedidos) {
+    out.push({
+      clave: 'costo',
+      titulo: cob.pedidos_con_costo === 0
+        ? 'Ningún pedido tiene cargado el coste de producto.'
+        : `Sólo ${num(cob.pedidos_con_costo)} de ${num(cob.pedidos)} pedidos tienen coste.`,
+      detalle: 'La utilidad neta se calcula restando producto y flete. Sin esos costes '
+        + 'no es utilidad: es lo mismo que se cobró.',
+      arreglo: 'Poner el coste unitario en la ficha de cada producto.',
+    });
+  }
+
+  // Un solo estado significa que nadie actualiza la entrega.
+  if (cob.pedidos > 0 && cob.estados_distintos <= 1) {
+    out.push({
+      clave: 'entrega',
+      titulo: 'Todos los pedidos comparten el mismo estado.',
+      detalle: 'La tasa de entrega compara entregados contra el total. Con un único '
+        + 'estado da siempre 100% y no dice nada de la operación.',
+      arreglo: 'Traer el estado real desde Mastershop o marcarlo al cerrar cada guía.',
+    });
+  }
+  return out;
+}
+
+/** Una cifra que no se puede sostener se muestra tapada, no bonita. */
+export const TAPADO = '—';

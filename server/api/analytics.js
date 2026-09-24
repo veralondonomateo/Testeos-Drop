@@ -50,6 +50,51 @@ function spendTotal(from, to, filters = {}) {
 }
 
 /**
+ * Con qué datos se está calculando de verdad.
+ *
+ * El panel llevaba semanas afirmando un ROAS de 48x, una utilidad del 98%% y una
+ * entrega del 100%%. Ninguna de las tres era falsa por un error de cuenta: eran
+ * divisiones correctas sobre datos que no estaban. La inversión de Meta sólo
+ * tenía un día cargado de treinta, el coste de producto venía casi en cero y
+ * todos los pedidos comparten el mismo estado porque nadie lo actualiza.
+ *
+ * Un número seguro calculado sobre nada engaña más que un hueco. Así que se
+ * mide la cobertura de cada entrada y el panel la usa para tapar la cifra que
+ * no puede sostener, en vez de imprimirla con dos decimales.
+ */
+async function cobertura(from, to, filters = {}) {
+  const where = ['o.created_at >= ?', 'o.created_at <= ?', "o.status != 'cancelled'"];
+  const params = [iso(from), iso(to)];
+  if (filters.product_id) { where.push('o.product_id = ?'); params.push(filters.product_id); }
+  if (filters.tienda_id) { where.push('o.product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); params.push(filters.tienda_id); }
+  if (filters.test_id) { where.push('o.test_id = ?'); params.push(filters.test_id); }
+
+  const wSpend = ['date >= ?', 'date <= ?', 'spend > 0'];
+  const pSpend = [dayKey(from), dayKey(to)];
+  if (filters.product_id) { wSpend.push('product_id = ?'); pSpend.push(filters.product_id); }
+  if (filters.tienda_id) { wSpend.push('product_id IN (SELECT id FROM products WHERE tienda_id = ?)'); pSpend.push(filters.tienda_id); }
+  if (filters.test_id) { wSpend.push('test_id = ?'); pSpend.push(filters.test_id); }
+
+  const [pauta, pedidos] = await Promise.all([
+    one(`SELECT COUNT(DISTINCT date) dias, MAX(date) ultimo FROM ad_spend WHERE ${wSpend.join(' AND ')}`, pSpend),
+    one(`SELECT COUNT(*) n,
+                COUNT(*) FILTER (WHERE COALESCE(o.cost_total,0) > 0) con_costo,
+                COUNT(DISTINCT o.status) estados
+         FROM orders o WHERE ${where.join(' AND ')}`, params),
+  ]);
+
+  const diasPeriodo = Math.max(1, Math.round((to - from) / 86400000) + 1);
+  return {
+    dias_periodo: diasPeriodo,
+    dias_con_pauta: Number(pauta.dias || 0),
+    ultimo_dia_con_pauta: pauta.ultimo || null,
+    pedidos: Number(pedidos.n || 0),
+    pedidos_con_costo: Number(pedidos.con_costo || 0),
+    estados_distintos: Number(pedidos.estados || 0),
+  };
+}
+
+/**
  * Variación porcentual contra el periodo anterior.
  * Devuelve null cuando no hay base de comparación: un "+3.681%" contra un
  * periodo vacío no informa nada, y el panel prefiere no mostrar el chip.
@@ -68,6 +113,8 @@ export async function overview(range = '30d', filters = {}) {
     spendTotal(start, end, filters),
     spendTotal(prevStart, prevEnd, filters),
   ]);
+
+  const cob = await cobertura(start, end, filters);
 
   const profit = cur.revenue - cur.cogs - spend.spend;
   const prevProfit = prev.revenue - prev.cogs - prevSpend.spend;
@@ -111,6 +158,7 @@ export async function overview(range = '30d', filters = {}) {
   return {
     range, from: dayKey(start), to: dayKey(end),
     kpis,
+    cobertura: cob,
     series,
     funnel: funnelData,
     by_status: byStatus,
