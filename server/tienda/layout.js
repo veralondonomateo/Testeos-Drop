@@ -74,13 +74,13 @@ p{margin:0 0 16px}
 /* cabecera */
 .hd{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.93);
   backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--linea)}
-.hd .in{max-width:var(--ancho);margin:0 auto;padding:10px 20px;
+.hd .in{max-width:var(--ancho);margin:0 auto;padding:8px 20px;
   display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px}
 .hd .marca{grid-column:2;justify-self:center;text-decoration:none;display:block}
 /* El logotipo viene sobre fondo blanco, que es el de la cabecera: encaja sin
    recortar. En el pie, que es crema, se usa el nombre en texto por eso mismo. */
-.hd .marca img{height:32px;width:auto;display:block}
-@media(min-width:900px){ .hd .marca img{height:40px} }
+.hd .marca img{height:42px;width:auto;display:block}
+@media(min-width:900px){ .hd .marca img{height:48px} }
 .hd nav{display:none}
 .hd .der{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
 .icono{display:grid;place-items:center;width:40px;height:40px;border:0;background:none;

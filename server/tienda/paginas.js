@@ -98,14 +98,17 @@ const CSS = `
    promesa, píldoras—, después la imagen, y el botón al final en móvil. En
    escritorio el botón sube a la columna de texto, porque ahí la imagen va al
    lado y no entre medias. */
-.hero-wrap{padding:18px 0 0}
+.hero-wrap{padding:14px 0 0}
 .hero{display:grid;grid-template-columns:1fr;gap:0;
   background:linear-gradient(180deg,var(--crema),#fff 78%);
-  border-radius:var(--radio);padding:24px 20px 22px;
-  margin:0 -20px;border:1px solid var(--linea)}
+  border-radius:18px;padding:24px 20px 22px;
+  margin:0;border:1px solid var(--linea)}
 .hero h1{margin:12px 0 10px;font-size:clamp(27px,6.4vw,38px)}
 .hero .lede{margin:0 0 18px}
-.hero .pills{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 4px}
+.hero .pills{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 4px}
+/* En móvil las píldoras van compactas: a tamaño normal cada una se llevaba
+   una línea entera y empujaba la foto fuera de la primera pantalla. */
+.hero .pills .pill{padding:6px 12px;font-size:12px}
 .hero .bajo{display:flex;flex-wrap:wrap;gap:5px 16px;margin:12px 0 0;
   font-size:12px;color:var(--tinta-suave)}
 .rate{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--tinta-suave)}
@@ -134,6 +137,7 @@ const CSS = `
   .hero{grid-template-columns:1.02fr 1fr;align-items:center;gap:36px;
     padding:clamp(34px,3.4vw,54px);margin:14px 0 0}
   .hero h1{font-size:clamp(34px,3.1vw,44px);margin:14px 0 12px}
+  .hero .pills .pill{padding:8px 15px;font-size:13px}
   .hero .im{margin:0;justify-content:flex-end;align-items:flex-end}
   .hero .im .mujer{width:auto;max-height:440px;max-width:100%;border-radius:18px}
   .hero .prueba{width:150px;right:-6px;bottom:14px}
@@ -277,10 +281,10 @@ export function home() {
   <div class="hero">
     <div class="tx">
       <div class="rate"><span class="av"><img src="/assets/testimonios/t04.jpg" alt=""><img src="/assets/testimonios/t06.jpg" alt=""></span>
-        <span><b>4.67</b> · +800 clientas en Colombia</span></div>
+        <span><b>4.67</b> · +1.450 clientas en Colombia</span></div>
       <h1>Tu cabello no se cae por tu edad. Son tus hormonas.</h1>
       <p class="lede">Trata la causa desde adentro y reactiva el folículo desde afuera.</p>
-      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">+4.200 clientas felices</span></div>
+      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">Aprobado por dermatólogos</span></div>
       <div class="cta-pc">
         <a class="btn btn-b" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
         <div class="bajo"><span>✓ Envíos a todo Colombia</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
@@ -415,7 +419,7 @@ export function producto(slug) {
         `<button type="button" data-foto="${g}"${i === 0 ? ' aria-current="true"' : ''}><img src="${g}" alt="" width="200" height="200" loading="lazy"></button>`).join('')}</div>` : ''}
     </div>
     <div>
-      <div class="rate"><span style="color:#E8A13A;letter-spacing:2px">★★★★★</span><span><b>4.67</b> · +800 clientas</span></div>
+      <div class="rate"><span style="color:#E8A13A;letter-spacing:2px">★★★★★</span><span><b>4.67</b> · +1.450 clientas</span></div>
       <h1 style="font-size:clamp(25px,3.2vw,34px);margin:10px 0 8px">${esc(p.nombre)}</h1>
       <p class="lede" style="margin-bottom:0">${esc(p.tagline)}</p>
       <div class="precio"><b id="pv">${pesos(p.precio)}</b>${p.antes ? `<s id="pa">${pesos(p.antes)}</s>` : ''}</div>
