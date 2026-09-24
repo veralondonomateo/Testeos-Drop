@@ -117,7 +117,7 @@ const CSS = `
 /* La imagen y la prueba: la mujer manda y el antes/después se apoya en ella,
    como en la referencia. Nada se recorta — la foto entra entera. */
 .hero .im{position:relative;margin:20px 0 0;display:flex;justify-content:center}
-.hero .im .mujer{width:min(78%,300px);height:auto;display:block}
+.hero .im .mujer{width:min(78%,300px);height:auto;display:block;border-radius:18px}
 .hero .prueba{position:absolute;right:0;bottom:6px;width:min(42%,158px);margin:0;
   background:#fff;border:1px solid var(--linea);border-radius:13px;padding:7px;
   box-shadow:0 12px 30px -16px rgba(46,46,46,.3)}
@@ -135,7 +135,7 @@ const CSS = `
     padding:clamp(34px,3.4vw,54px);margin:14px 0 0}
   .hero h1{font-size:clamp(34px,3.1vw,44px);margin:14px 0 12px}
   .hero .im{margin:0;justify-content:flex-end;align-items:flex-end}
-  .hero .im .mujer{width:auto;max-height:440px;max-width:100%}
+  .hero .im .mujer{width:auto;max-height:440px;max-width:100%;border-radius:18px}
   .hero .prueba{width:150px;right:-6px;bottom:14px}
   .cta-pc{display:block;margin-top:22px}
   .cta-mov{display:none}
@@ -280,7 +280,7 @@ export function home() {
         <span><b>4.67</b> · +800 clientas en Colombia</span></div>
       <h1>Tu cabello no se cae por tu edad. Son tus hormonas.</h1>
       <p class="lede">Trata la causa desde adentro y reactiva el folículo desde afuera.</p>
-      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span></div>
+      <div class="pills"><span class="pill">Menos caída</span><span class="pill">Resultados en 8 semanas</span><span class="pill">+4.200 clientas felices</span></div>
       <div class="cta-pc">
         <a class="btn btn-b" href="/p/dermafol-360-v2">Empieza tu protocolo</a>
         <div class="bajo"><span>✓ Envíos a todo Colombia</span><span>✓ Pagas al recibir</span><span>✓ Garantía de 90 días</span></div>
