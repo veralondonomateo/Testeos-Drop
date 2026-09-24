@@ -48,11 +48,18 @@
   --accent-hov:  #143024;
   --accent-soft: #EDF3EF;
 
-  /* Serie de datos — validada (ΔE CVD 9.1 · contraste vs #fff) */
-  --series-1:    #2a78d6;
-  --series-2:    #eb6834;
-  --series-3:    #1baf7a;
-  --series-4:    #eda100;
+  /* Serie de datos, derivada de la paleta del grupo.
+     Las cuatro se separan por LUMINOSIDAD y no por tono (ΔL ≥ 0,07 entre
+     vecinas), que es lo que las mantiene distinguibles para quien no
+     distingue colores. Medido: el par principal mejora al anterior en las
+     tres pruebas — entre sí 2,59:1 contra 1,38, protanopía 4,28 contra 2,99,
+     deuteranopía 2,97 contra 1,93.
+     Aun así el color nunca es la única señal: cada gráfico lleva su tabla
+     equivalente, como manda el manual. */
+  --series-1:    #1B3C30;   /* forest */
+  --series-2:    #CA4923;   /* signal */
+  --series-3:    #6E9080;   /* sage   */
+  --series-4:    #D8A54A;   /* ochre  */
 
   /* Estados */
   --good:        #0ca30c;
@@ -113,10 +120,11 @@
   --accent-hov:  #D9E9E0;
   --accent-soft: #1E2D26;
 
-  --series-1:    #3987e5;
-  --series-2:    #d95926;
-  --series-3:    #199e70;
-  --series-4:    #c98500;
+  /* En oscuro se suben de luminosidad para conservar la separación. */
+  --series-1:    #8FBCA6;
+  --series-2:    #E8764C;
+  --series-3:    #B7CFC2;
+  --series-4:    #E8C070;
 
   --good-bg:     #12241A;
   --warning-bg:  #2A2110;
@@ -333,11 +341,17 @@ svg { display: block; }
 
 /* ── Stat tile ───────────────────────────────────────────────────────── */
 
-.stats { display: grid; gap: 14px; }
-.stats.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.stats.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.stats.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.stats.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Las fichas de cifra se reparten solas: cinco columnas en un portátil dejan
+   cada cifra en 170 px, y "$20.696.700" no cabe ahí sin partirse. Con `auto-fit`
+   el navegador pone las que quepan a un ancho legible y baja el resto. */
+.stats { display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.stats.c2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+@media (min-width: 1280px) {
+  .stats.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stats.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stats.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 
 .stat {
   background: var(--surface); border: 1px solid var(--line);
@@ -986,3 +1000,46 @@ table.data td.tight { width: 1%; white-space: nowrap; }
 .login-art .brand-name{font-size:15.5px}
 /* En la portada del login el titular es editorial y respira. */
 .login-art h2{letter-spacing:-.035em;line-height:1.08;white-space:pre-line}
+
+/* ── Lectura de datos ─────────────────────────────────────────────────
+   El manual es un sistema editorial: etiquetas diminutas en versalitas con
+   tracking, y la cifra respirando debajo. La jerarquía la hace el tamaño, no
+   el color — que además es lo que el propio manual exige de los estados.
+   Las clases de aquí abajo son las que charts.js y ui.js generan de verdad;
+   estilar nombres inventados es la forma más silenciosa de no cambiar nada. */
+.stat-label{
+  font-size:10.5px; font-weight:600; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--muted);
+}
+.stat-value{
+  font-size:clamp(23px,2vw,29px); font-weight:600; letter-spacing:-.03em;
+  line-height:1.1; margin-top:7px; font-variant-numeric:tabular-nums;
+}
+.stat-foot{margin-top:9px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.stat-hint{font-size:12px;color:var(--muted)}
+
+/* Ejes recesivos: el dato manda, la rejilla acompaña. */
+.chart text{font-family:var(--font-ui);font-variant-numeric:tabular-nums}
+.chart .axis-label{font-size:10.5px;fill:var(--muted);letter-spacing:.02em}
+
+/* Leyenda en versalitas, como las etiquetas del manual. */
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.legend-item{display:inline-flex;align-items:center;gap:7px;
+  font-size:10.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-2)}
+.legend-key{flex:0 0 auto}
+
+/* La tabla equivalente de cada gráfico: cerrada, pero ofrecida. Es la que
+   sostiene la regla de que el color no sea la única señal. */
+.table-toggle{
+  font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); cursor:pointer; padding:10px 0;
+}
+.table-toggle:hover{color:var(--ink)}
+.table-wrap{overflow-x:auto}
+.table-wrap td.num, .table-wrap th.num{font-variant-numeric:tabular-nums;text-align:right}
+
+/* Embudo: cada paso con su porcentaje al lado, no sólo la barra. */
+.funnel-step .rate{font-variant-numeric:tabular-nums;font-weight:600}
+.funnel-step .name{font-size:12.5px;letter-spacing:.02em}
+.funnel-step .val{font-variant-numeric:tabular-nums}
