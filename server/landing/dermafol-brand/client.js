@@ -138,5 +138,11 @@
     }
   }
   $('[data-more-reviews]').addEventListener('click',e=>{$$('[data-more-review]').forEach(r=>r.hidden=false);e.currentTarget.hidden=true;});
+  $('.brand-line-pause').addEventListener('click',e=>{
+    const paused=$('.brand-line').classList.toggle('paused');
+    e.currentTarget.setAttribute('aria-pressed',String(paused));
+    e.currentTarget.setAttribute('aria-label',paused?'Reanudar cinta animada':'Pausar cinta animada');
+    e.currentTarget.textContent=paused?'▶':'Ⅱ';
+  });
   sync();
 })();
