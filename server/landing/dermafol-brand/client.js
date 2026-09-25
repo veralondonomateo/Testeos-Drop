@@ -18,6 +18,17 @@
     $$('[data-total]').forEach(e => e.textContent = money(plan.price));
     $$('[data-gift-value]').forEach(e => e.textContent = money(giftTotal));
     $('[data-cart-count]').textContent = state.qty;
+    $('[data-bundle-saving]').textContent = state.qty===1 ? 'Tu kit completo + envío gratis a Colombia.' : `Ahorras ${money(139900*state.qty-plan.price)} frente a comprar ${state.qty} kits individuales.`;
+    $('[data-hero-progress]').textContent = `${plan.gifts} de 5 desbloqueados`;
+    $('[data-hero-progress-bar]').value = plan.gifts;
+    $$('[data-hero-gifts] .gift').forEach((el,i)=>{
+      const eligible = gifts[i].level <= state.qty;
+      el.classList.toggle('locked', !eligible);
+      el.querySelector('strong').textContent = eligible ? 'INCLUIDO' : 'CON '+gifts[i].level+' KITS';
+      const badge = el.querySelector('.lock');
+      if(!eligible && !badge) el.querySelector('.gift-image').insertAdjacentHTML('beforeend',`<span class="lock">${lock}</span>`);
+      if(eligible && badge) badge.remove();
+    });
     $('[data-plan-label]').textContent = `${state.qty} ${state.qty === 1 ? 'kit' : 'kits'} · ${plan.gifts + (prepaid ? 1 : 0)} regalos`;
     $$('[data-quick-plan]').forEach(b => { const active = Number(b.dataset.quickPlan) === state.qty; b.classList.toggle('active', active); b.setAttribute('aria-pressed', String(active)); });
     $$('[name=plan]').forEach(r => r.checked = Number(r.value) === state.qty);
@@ -74,12 +85,16 @@
     b.addEventListener('click', () => showStage(i));
     b.addEventListener('keydown', e => { const n = e.key === 'ArrowRight' ? (i+1)%4 : e.key === 'ArrowLeft' ? (i+3)%4 : e.key === 'Home' ? 0 : e.key === 'End' ? 3 : null; if(n !== null){ e.preventDefault(); showStage(n,true); } });
   });
-  const heroAlts = { 'kit-caja': 'Kit Dermafol: suplemento, Roll-On y caja', 'suplemento-abierto': 'Suplemento Dermafol de 60 cápsulas', 'aplicando-rollon': 'Aplicación del Roll-On Dermafol' };
   $$('[data-hero]').forEach((b,i) => b.addEventListener('click', () => {
-    const name = b.dataset.hero, img = $('.hero-photo'); img.src = assetBase + '/' + name + '-960.webp'; img.srcset = `${assetBase}/${name}-480.webp 480w, ${assetBase}/${name}-960.webp 960w`; img.alt = heroAlts[name];
+    const name = b.dataset.hero, img = $('.hero-photo');
+    img.src = '/assets/dermafol/' + name + '-880.webp';
+    img.srcset = `/assets/dermafol/${name}-440.webp 440w, /assets/dermafol/${name}-880.webp 880w`;
+    img.alt = b.querySelector('img').alt;
     $$('[data-hero]').forEach(btn => { btn.classList.toggle('active',btn === b); btn.setAttribute('aria-pressed',String(btn === b)); });
-    $('.visual-foot>span:last-child').textContent = '0' + (i+1) + ' / 03';
+    $('.visual-foot>span:last-child').textContent = '0' + (i+1) + ' / 04';
   }));
+  $('.brand-menu').addEventListener('keydown',e=>{if(e.key==='Escape'){$('.brand-menu').open=false;$('.brand-menu summary').focus();}});
+  $$('.brand-menu a').forEach(a=>a.addEventListener('click',()=>$('.brand-menu').open=false));
   $$('.reel-play').forEach(b => b.addEventListener('click', async () => {
     const v = b.previousElementSibling, s = v.querySelector('source');
     if(!s.src) { s.src = s.dataset.src; v.load(); }
@@ -122,5 +137,6 @@
       $$('.section-heading,.editorial,.guarantee,.final-cta').forEach(e => { e.classList.add('reveal-on-scroll'); obs.observe(e); });
     }
   }
+  $('[data-more-reviews]').addEventListener('click',e=>{$$('[data-more-review]').forEach(r=>r.hidden=false);e.currentTarget.hidden=true;});
   sync();
 })();
