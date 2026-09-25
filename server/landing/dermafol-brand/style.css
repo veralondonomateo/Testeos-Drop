@@ -45,3 +45,10 @@ body{-webkit-font-smoothing:antialiased}h1,h2,h3{font-weight:600;letter-spacing:
 /* Matching image panels keep the two product cards aligned at every width. */
 .duo .ritual-card>img,.duo .rollon-product-photo{width:100%;aspect-ratio:1;height:auto;flex:none}.duo .ritual-card>img{object-fit:contain}.duo .ritual-copy{display:flex;flex-direction:column}.duo .ritual-note{margin-top:auto;padding-top:20px}.ritual-card{background:#fff}.card-back{background:#fff}
 @media(max-width:700px){.duo .ritual-card>img,.duo .rollon-product-photo{aspect-ratio:1;height:auto}.ritual-copy{padding:20px 16px}.ritual-copy h3{font-size:20px;line-height:1.2}.ritual-copy p{font-size:13px;line-height:1.6}}
+
+/* Consistent testimonial frames without cropping customer photos. */
+.testimonials{align-items:stretch;grid-auto-rows:1fr}
+.review{align-self:stretch}
+.review-photo{height:240px;aspect-ratio:auto;object-fit:contain;object-position:center;flex-shrink:0;background:#fff}
+.review blockquote{flex:1}
+@media(max-width:700px){.review-photo{height:230px}}

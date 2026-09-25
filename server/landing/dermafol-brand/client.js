@@ -91,7 +91,6 @@
     img.srcset = `/assets/dermafol/${name}-440.webp 440w, /assets/dermafol/${name}-880.webp 880w`;
     img.alt = b.querySelector('img').alt;
     $$('[data-hero]').forEach(btn => { btn.classList.toggle('active',btn === b); btn.setAttribute('aria-pressed',String(btn === b)); });
-    $('.visual-foot>span:last-child').textContent = '0' + (i+1) + ' / 04';
   }));
   $('.brand-menu').addEventListener('keydown',e=>{if(e.key==='Escape'){$('.brand-menu').open=false;$('.brand-menu summary').focus();}});
   $$('.brand-menu a').forEach(a=>a.addEventListener('click',()=>$('.brand-menu').open=false));
