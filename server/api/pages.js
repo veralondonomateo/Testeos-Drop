@@ -270,6 +270,9 @@ export async function renderPublicPage(slug, { preview = false, tienda = null } 
   // Se deniega por defecto en vez de permitir lo no asignado. Una página que
   // aparece donde no debe es un problema de marca; una que falta se nota al
   // primer clic y se arregla asignándola.
+  // A cold cache still has the fetched draft in p, even though false was cached.
+  // Apply the publication guard to both fresh rows and cache hits.
+  if (!p || p.status !== 'published') return null;
   if (p && tienda && p.tienda_id !== tienda.id) return null;
   return p ? renderPage(p) : null;
 }
